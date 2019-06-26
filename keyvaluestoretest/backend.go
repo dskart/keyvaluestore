@@ -108,6 +108,33 @@ func TestBackendAtomicWrite(t *testing.T, newBackend func() keyvaluestore.Backen
 		assert.NoError(t, err)
 		assert.True(t, ok)
 	})
+
+	t.Run("ZAdd", func(t *testing.T) {
+		assert.NoError(t, b.Set("zsetcond", "foo"))
+
+		tx := b.AtomicWrite()
+		defer assertConditionFail(t, tx.SetNX("zsetcond", "foo"))
+		defer assertConditionPass(t, tx.ZAdd("zset", "foo", 1.0))
+		defer assertConditionPass(t, tx.ZAdd("zset", "bar", 2.0))
+		ok, err := tx.Exec()
+		assert.NoError(t, err)
+		assert.False(t, ok)
+
+		count, err := b.ZCount("zset", 0.0, 10.0)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, count)
+
+		tx = b.AtomicWrite()
+		defer assertConditionPass(t, tx.ZAdd("zset", "foo", 1.0))
+		defer assertConditionPass(t, tx.ZAdd("zset", "bar", 2.0))
+		ok, err = tx.Exec()
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		count, err = b.ZCount("zset", 0.0, 10.0)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, count)
+	})
 }
 
 func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {

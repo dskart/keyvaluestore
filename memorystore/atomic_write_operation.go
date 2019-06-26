@@ -59,6 +59,16 @@ func (op *AtomicWriteOperation) Delete(key string) keyvaluestore.AtomicWriteResu
 	})
 }
 
+func (op *AtomicWriteOperation) ZAdd(key string, member interface{}, score float64) keyvaluestore.AtomicWriteResult {
+	return op.write(&atomicWriteOperation{
+		write: func() {
+			op.Backend.zadd(key, member, func(previousScore *float64) (float64, error) {
+				return score, nil
+			})
+		},
+	})
+}
+
 func (op *AtomicWriteOperation) Exec() (bool, error) {
 	if len(op.operations) > keyvaluestore.MaxAtomicWriteOperations {
 		return false, fmt.Errorf("max operation count exceeded")

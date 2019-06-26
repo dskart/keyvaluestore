@@ -24,6 +24,11 @@ func (op *readCacheAtomicWriteOperation) Delete(key string) keyvaluestore.Atomic
 	return op.atomicWrite.Delete(key)
 }
 
+func (op *readCacheAtomicWriteOperation) ZAdd(key string, member interface{}, score float64) keyvaluestore.AtomicWriteResult {
+	op.invalidations = append(op.invalidations, key)
+	return op.atomicWrite.ZAdd(key, member, score)
+}
+
 func (op *readCacheAtomicWriteOperation) Exec() (bool, error) {
 	ret, err := op.atomicWrite.Exec()
 	for _, key := range op.invalidations {

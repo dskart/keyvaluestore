@@ -71,6 +71,19 @@ func (op *AtomicWriteOperation) Delete(key string) keyvaluestore.AtomicWriteResu
 	})
 }
 
+func (op *AtomicWriteOperation) ZAdd(key string, member interface{}, score float64) keyvaluestore.AtomicWriteResult {
+	s := *keyvaluestore.ToString(member)
+	return op.write(dynamodb.TransactWriteItem{
+		Put: &dynamodb.Put{
+			TableName: &op.Backend.TableName,
+			Item: newItem(key, s, map[string]*dynamodb.AttributeValue{
+				"v":   attributeValue(s),
+				"rk2": attributeValue(floatSortKey(score) + s),
+			}),
+		},
+	})
+}
+
 func (op *AtomicWriteOperation) Exec() (bool, error) {
 	token := make([]byte, 20)
 	if _, err := rand.Read(token); err != nil {

@@ -13,6 +13,7 @@ type AtomicWriteOperation interface {
 	SetNX(key string, value interface{}) AtomicWriteResult
 	CAS(key string, oldValue, newValue string) AtomicWriteResult
 	Delete(key string) AtomicWriteResult
+	ZAdd(key string, member interface{}, score float64) AtomicWriteResult
 
 	// Executes the operation. If a condition failed, returns false.
 	Exec() (bool, error)

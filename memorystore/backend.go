@@ -252,9 +252,6 @@ type sortedSet struct {
 }
 
 func (b *Backend) zadd(key string, member interface{}, f func(previousScore *float64) (float64, error)) (float64, error) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
 	v := *keyvaluestore.ToString(member)
 	s, _ := b.m[key].(*sortedSet)
 	if s == nil {
@@ -284,6 +281,9 @@ func (b *Backend) zadd(key string, member interface{}, f func(previousScore *flo
 }
 
 func (b *Backend) ZAdd(key string, member interface{}, score float64) error {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	_, err := b.zadd(key, member, func(previousScore *float64) (float64, error) {
 		return score, nil
 	})
@@ -305,6 +305,9 @@ func (b *Backend) ZScore(key string, member interface{}) (*float64, error) {
 }
 
 func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
 	return b.zadd(key, member, func(previousScore *float64) (float64, error) {
 		if previousScore != nil {
 			return *previousScore + n, nil

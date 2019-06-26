@@ -59,6 +59,15 @@ func (op *AtomicWriteOperation) Delete(key string) keyvaluestore.AtomicWriteResu
 	})
 }
 
+func (op *AtomicWriteOperation) ZAdd(key string, member interface{}, score float64) keyvaluestore.AtomicWriteResult {
+	return op.write(&atomicWriteOperation{
+		key:       key,
+		condition: "true",
+		write:     "redis.call('zadd', $@, $1, $0)",
+		args:      []interface{}{member, score},
+	})
+}
+
 func preprocessAtomicWriteExpression(in string, keyIndex, argsOffset, numArgs int) string {
 	out := strings.Replace(in, "$@", fmt.Sprintf("KEYS[%d]", keyIndex), -1)
 	for i := numArgs - 1; i >= 0; i-- {
