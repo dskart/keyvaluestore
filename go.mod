@@ -1,4 +1,4 @@
-module github.com/theaaf/keyvaluestore
+module github.com/ccbrown/keyvaluestore
 
 require (
 	github.com/aws/aws-sdk-go v1.20.4

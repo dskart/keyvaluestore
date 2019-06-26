@@ -8,7 +8,7 @@ import (
 
 	"github.com/ccbrown/go-immutable"
 
-	"github.com/theaaf/keyvaluestore"
+	"github.com/ccbrown/keyvaluestore"
 )
 
 type Backend struct {

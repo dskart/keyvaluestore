@@ -3,7 +3,7 @@ package memorystore
 import (
 	"fmt"
 
-	"github.com/theaaf/keyvaluestore"
+	"github.com/ccbrown/keyvaluestore"
 )
 
 type AtomicWriteOperation struct {

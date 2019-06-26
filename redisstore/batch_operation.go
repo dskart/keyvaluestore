@@ -3,7 +3,7 @@ package redisstore
 import (
 	"github.com/go-redis/redis"
 
-	"github.com/theaaf/keyvaluestore"
+	"github.com/ccbrown/keyvaluestore"
 )
 
 type BatchOperation struct {

@@ -1,6 +1,6 @@
 package keyvaluestorecache
 
-import "github.com/theaaf/keyvaluestore"
+import "github.com/ccbrown/keyvaluestore"
 
 type readCacheAtomicWriteOperation struct {
 	ReadCache   *ReadCache

@@ -5,7 +5,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/theaaf/keyvaluestore"
+	"github.com/ccbrown/keyvaluestore"
 )
 
 // Read cache caches reads permanently, or until they're invalidated by a write operation on the
