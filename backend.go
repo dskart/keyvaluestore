@@ -6,7 +6,7 @@ type Backend interface {
 	// properties such as atomicity should not be assumed.
 	Batch() BatchOperation
 
-	// AtomicWrite executes up to 10 write operations atomically, failing entirely if any
+	// AtomicWrite executes up to 25 write operations atomically, failing entirely if any
 	// conditional operations (e.g. SetNX) are not executed.
 	AtomicWrite() AtomicWriteOperation
 
