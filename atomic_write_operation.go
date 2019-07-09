@@ -5,9 +5,9 @@ type AtomicWriteResult interface {
 	ConditionalFailed() bool
 }
 
-// DynamoDB can't do more than 10 operations in an atomic write. So all stores should enforce this
+// DynamoDB can't do more than 25 operations in an atomic write. So all stores should enforce this
 // limit.
-const MaxAtomicWriteOperations = 10
+const MaxAtomicWriteOperations = 25
 
 type AtomicWriteOperation interface {
 	SetNX(key string, value interface{}) AtomicWriteResult
