@@ -1,6 +1,7 @@
 package dynamodbstore
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"strings"
 
@@ -9,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/private/protocol/jsonrpc"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbiface"
-	jsoniter "github.com/json-iterator/go"
 )
 
 type AWSBackendClient struct {
@@ -67,7 +67,7 @@ func (c *AWSBackendClient) TransactWriteItems(input *dynamodb.TransactWriteItems
 				return
 			}
 			var jsonErr jsonErrorResponse
-			if err := jsoniter.Unmarshal(bodyBytes, &jsonErr); err != nil {
+			if err := json.Unmarshal(bodyBytes, &jsonErr); err != nil {
 				req.Error = awserr.New("SerializationError", "failed decoding JSON RPC error response", err)
 				return
 			}
