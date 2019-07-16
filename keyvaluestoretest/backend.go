@@ -31,6 +31,22 @@ func assertConditionFail(t *testing.T, r keyvaluestore.AtomicWriteResult) {
 func TestBackendAtomicWrite(t *testing.T, newBackend func() keyvaluestore.Backend) {
 	b := newBackend()
 
+	t.Run("Set", func(t *testing.T) {
+		tx := b.AtomicWrite()
+		defer assertConditionPass(t, tx.Set("foo", "bar"))
+		defer assertConditionPass(t, tx.Set("bar", "baz"))
+		ok, err := tx.Exec()
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		tx = b.AtomicWrite()
+		defer assertConditionFail(t, tx.SetNX("foo", "bar"))
+		defer assertConditionPass(t, tx.Set("baz", "qux"))
+		ok, err = tx.Exec()
+		assert.NoError(t, err)
+		assert.False(t, ok)
+	})
+
 	t.Run("SetNX", func(t *testing.T) {
 		assert.NoError(t, b.Set("foo", "bar"))
 		_, err := b.Delete("notset")

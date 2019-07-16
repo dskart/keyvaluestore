@@ -9,6 +9,11 @@ type readCacheAtomicWriteOperation struct {
 	invalidations []string
 }
 
+func (op *readCacheAtomicWriteOperation) Set(key string, value interface{}) keyvaluestore.AtomicWriteResult {
+	op.invalidations = append(op.invalidations, key)
+	return op.atomicWrite.Set(key, value)
+}
+
 func (op *readCacheAtomicWriteOperation) SetNX(key string, value interface{}) keyvaluestore.AtomicWriteResult {
 	op.invalidations = append(op.invalidations, key)
 	return op.atomicWrite.SetNX(key, value)

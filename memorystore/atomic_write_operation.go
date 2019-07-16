@@ -28,6 +28,14 @@ func (op *AtomicWriteOperation) write(wOp *atomicWriteOperation) keyvaluestore.A
 	return wOp
 }
 
+func (op *AtomicWriteOperation) Set(key string, value interface{}) keyvaluestore.AtomicWriteResult {
+	return op.write(&atomicWriteOperation{
+		write: func() {
+			op.Backend.set(key, value)
+		},
+	})
+}
+
 func (op *AtomicWriteOperation) SetNX(key string, value interface{}) keyvaluestore.AtomicWriteResult {
 	return op.write(&atomicWriteOperation{
 		condition: func() bool {

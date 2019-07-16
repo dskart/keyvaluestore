@@ -10,6 +10,7 @@ type AtomicWriteResult interface {
 const MaxAtomicWriteOperations = 25
 
 type AtomicWriteOperation interface {
+	Set(key string, value interface{}) AtomicWriteResult
 	SetNX(key string, value interface{}) AtomicWriteResult
 	CAS(key string, oldValue, newValue string) AtomicWriteResult
 	Delete(key string) AtomicWriteResult
