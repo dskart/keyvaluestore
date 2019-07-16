@@ -14,11 +14,6 @@ type Backend interface {
 	Get(key string) (*string, error)
 	Set(key string, value interface{}) error
 
-	// CAS performs a compare-and-swap operation. It gets the given key, allows you to transform its
-	// value, then updates it only if it hasn't changed. Returning nil from the transform function
-	// performs no action, causing CAS to return true, nil.
-	CAS(key string, transform func(v *string) (interface{}, error)) (success bool, err error)
-
 	// Add an integer to an integer value. Or set if the key doesn't exist.
 	AddInt(key string, n int64) (int64, error)
 
@@ -28,8 +23,11 @@ type Backend interface {
 	// Set if the key doesn't exist.
 	SetNX(key string, value interface{}) (bool, error)
 
-	// Add to or create a set. Sets are ideal for small sizes and fast read access. Sorted sets
-	// should be considered instead for large, write-heavy applications.
+	// Set if the key exists and its value is equal to the given one.
+	SetEQ(key string, value, oldValue interface{}) (success bool, err error)
+
+	// Add to or create a set. Sets are ideal for small sizes, but have implementation-dependent
+	// size limitations (400KB for DynamoDB). For large or unbounded sets, use ZAdd instead.
 	SAdd(key string, member interface{}, members ...interface{}) error
 
 	// Remove from a set.

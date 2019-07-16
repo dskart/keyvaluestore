@@ -3,8 +3,6 @@ package keyvaluestoretest
 import (
 	"fmt"
 	"math"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 
@@ -104,21 +102,21 @@ func TestBackendAtomicWrite(t *testing.T, newBackend func() keyvaluestore.Backen
 		assert.Nil(t, got)
 	})
 
-	t.Run("CAS", func(t *testing.T) {
-		assert.NoError(t, b.Set("foo", "bar"))
+	t.Run("SetEQ", func(t *testing.T) {
+		assert.NoError(t, b.Set("foo", 1))
 		assert.NoError(t, b.Set("deleteme", "bar"))
 		_, err := b.Delete("notset")
 		assert.NoError(t, err)
 
 		tx := b.AtomicWrite()
-		defer assertConditionFail(t, tx.CAS("foo", "baz", "qux"))
+		defer assertConditionFail(t, tx.SetEQ("foo", 2, 100))
 		defer assertConditionPass(t, tx.SetNX("notset", "bar"))
 		ok, err := tx.Exec()
 		assert.NoError(t, err)
 		assert.False(t, ok)
 
 		tx = b.AtomicWrite()
-		defer assertConditionPass(t, tx.CAS("foo", "bar", "baz"))
+		defer assertConditionPass(t, tx.SetEQ("foo", 2, 1))
 		defer assertConditionPass(t, tx.SetNX("notset", "bar"))
 		ok, err = tx.Exec()
 		assert.NoError(t, err)
@@ -150,6 +148,55 @@ func TestBackendAtomicWrite(t *testing.T, newBackend func() keyvaluestore.Backen
 		count, err = b.ZCount("zset", 0.0, 10.0)
 		assert.NoError(t, err)
 		assert.Equal(t, 2, count)
+
+		t.Run("ZRem", func(t *testing.T) {
+			tx = b.AtomicWrite()
+			defer assertConditionPass(t, tx.ZRem("zset", "foo"))
+			ok, err = tx.Exec()
+			assert.NoError(t, err)
+			assert.True(t, ok)
+
+			count, err = b.ZCount("zset", 0.0, 10.0)
+			assert.NoError(t, err)
+			assert.Equal(t, 1, count)
+		})
+	})
+
+	t.Run("SAdd", func(t *testing.T) {
+		assert.NoError(t, b.Set("setcond", "foo"))
+
+		tx := b.AtomicWrite()
+		defer assertConditionFail(t, tx.SetNX("setcond", "foo"))
+		defer assertConditionPass(t, tx.SAdd("set", "foo", "bar"))
+		ok, err := tx.Exec()
+		assert.NoError(t, err)
+		assert.False(t, ok)
+
+		members, err := b.SMembers("set")
+		assert.NoError(t, err)
+		assert.Empty(t, members)
+
+		tx = b.AtomicWrite()
+		defer assertConditionPass(t, tx.SAdd("set", "foo", "bar"))
+		ok, err = tx.Exec()
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		members, err = b.SMembers("set")
+		assert.NoError(t, err)
+		assert.Len(t, members, 2)
+
+		t.Run("SRem", func(t *testing.T) {
+			tx = b.AtomicWrite()
+			defer assertConditionPass(t, tx.SRem("set", "foo"))
+			ok, err = tx.Exec()
+			assert.NoError(t, err)
+			assert.True(t, ok)
+
+			members, err = b.SMembers("set")
+			assert.NoError(t, err)
+			assert.Len(t, members, 1)
+		})
 	})
 }
 
@@ -274,39 +321,6 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 		members, err = b.SMembers("foo")
 		assert.ElementsMatch(t, []string{"bar", "baz"}, members)
 		assert.NoError(t, err)
-
-		// DynamoDB has a 400KB size limit for items. Make sure sets work fine when they grow larger
-		// than that.
-		t.Run("LargeSet", func(t *testing.T) {
-			b := newBackend()
-
-			bigPrefix := strings.Repeat("x", 10000)
-			expected := make([]string, 90)
-			for i := 0; i < len(expected); i++ {
-				s := bigPrefix + strconv.FormatInt(int64(i), 10)
-				expected[i] = s
-				require.NoError(t, b.SAdd("foo", s))
-			}
-
-			members, err := b.SMembers("foo")
-			require.NoError(t, err)
-			assert.ElementsMatch(t, expected, members)
-
-			require.NoError(t, b.SRem("foo", expected[len(expected)-1]))
-			expected = expected[:len(expected)-1]
-
-			members, err = b.SMembers("foo")
-			require.NoError(t, err)
-			assert.ElementsMatch(t, expected, members)
-
-			require.NoError(t, b.SRem("foo", expected[0]))
-			require.NoError(t, b.SAdd("foo", expected[len(expected)-1]))
-			expected = expected[1:]
-
-			members, err = b.SMembers("foo")
-			require.NoError(t, err)
-			assert.ElementsMatch(t, expected, members)
-		})
 	})
 
 	t.Run("SRem", func(t *testing.T) {
@@ -372,26 +386,6 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 			require.NoError(t, batch.Exec())
 			members, _ := smembers.Result()
 			assert.ElementsMatch(t, []string{"a", "b"}, members)
-
-			// DynamoDB has a 400KB size limit for items. Make sure sets work fine when they grow larger
-			// than that.
-			t.Run("LargeSet", func(t *testing.T) {
-				b := newBackend()
-
-				bigPrefix := strings.Repeat("x", 10000)
-				expected := make([]string, 90)
-				for i := 0; i < len(expected); i++ {
-					s := bigPrefix + strconv.FormatInt(int64(i), 10)
-					expected[i] = s
-					require.NoError(t, b.SAdd("foo", s))
-				}
-
-				batch := b.Batch()
-				smembers := batch.SMembers("foo")
-				require.NoError(t, batch.Exec())
-				members, _ := smembers.Result()
-				assert.ElementsMatch(t, expected, members)
-			})
 		})
 
 		t.Run("Set", func(t *testing.T) {
@@ -431,16 +425,13 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 		})
 	})
 
-	t.Run("CAS", func(t *testing.T) {
-		t.Run("Set", func(t *testing.T) {
+	t.Run("SetEQ", func(t *testing.T) {
+		t.Run("Ok", func(t *testing.T) {
 			b := newBackend()
 
 			assert.NoError(t, b.Set("foo", "bar"))
 
-			success, err := b.CAS("foo", func(prev *string) (interface{}, error) {
-				assert.Equal(t, "bar", *prev)
-				return "baz", nil
-			})
+			success, err := b.SetEQ("foo", "baz", "bar")
 			assert.True(t, success)
 			assert.NoError(t, err)
 
@@ -449,50 +440,14 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 			assert.Equal(t, "baz", *v)
 		})
 
-		t.Run("Contention", func(t *testing.T) {
+		t.Run("Fail", func(t *testing.T) {
 			b := newBackend()
 
 			assert.NoError(t, b.Set("foo", "bar"))
 
-			success, err := b.CAS("foo", func(prev *string) (interface{}, error) {
-				assert.Equal(t, "bar", *prev)
-				assert.NoError(t, b.Set("foo", "qux"))
-				return "baz", nil
-			})
+			success, err := b.SetEQ("foo", "qux", "baz")
 			assert.False(t, success)
 			assert.NoError(t, err)
-
-			v, err := b.Get("foo")
-			require.NoError(t, err)
-			assert.Equal(t, "qux", *v)
-		})
-
-		t.Run("NOP", func(t *testing.T) {
-			b := newBackend()
-
-			assert.NoError(t, b.Set("foo", "bar"))
-
-			success, err := b.CAS("foo", func(prev *string) (interface{}, error) {
-				return nil, nil
-			})
-			assert.True(t, success)
-			assert.NoError(t, err)
-
-			v, err := b.Get("foo")
-			require.NoError(t, err)
-			assert.Equal(t, "bar", *v)
-		})
-
-		t.Run("Error", func(t *testing.T) {
-			b := newBackend()
-
-			assert.NoError(t, b.Set("foo", "bar"))
-
-			success, err := b.CAS("foo", func(prev *string) (interface{}, error) {
-				return nil, fmt.Errorf("err")
-			})
-			assert.False(t, success)
-			assert.Error(t, err)
 
 			v, err := b.Get("foo")
 			require.NoError(t, err)

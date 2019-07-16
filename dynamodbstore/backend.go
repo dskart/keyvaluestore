@@ -221,158 +221,79 @@ func (b *Backend) SetXX(key string, value interface{}) (bool, error) {
 	return true, nil
 }
 
-func setKey(key string, bucket int) map[string]*dynamodb.AttributeValue {
-	var buf [binary.MaxVarintLen64]byte
-	n := binary.PutVarint(buf[:], int64(bucket))
-	return compositeKey(key, string(buf[:n]))
+func (b *Backend) SetEQ(key string, value, oldValue interface{}) (bool, error) {
+	if _, err := b.Client.PutItem(&dynamodb.PutItemInput{
+		TableName: aws.String(b.TableName),
+		Item: newItem(key, "_", map[string]*dynamodb.AttributeValue{
+			"v": attributeValue(value),
+		}),
+		ConditionExpression: aws.String("v = :v"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":v": attributeValue(oldValue),
+		},
+	}); err != nil {
+		if err := err.(awserr.Error); err != nil && err.Code() == "ConditionalCheckFailedException" {
+			return false, nil
+		}
+		return false, errors.Wrap(err, "dynamodb put item request error")
+	}
+	return true, nil
+}
+
+func serializeSMembers(member interface{}, members ...interface{}) [][]byte {
+	bs := make([][]byte, 1+len(members))
+	bs[0] = []byte(*keyvaluestore.ToString(member))
+	for i, member := range members {
+		bs[i+1] = []byte(*keyvaluestore.ToString(member))
+	}
+	return bs
 }
 
 func (b *Backend) SAdd(key string, member interface{}, members ...interface{}) error {
-	bs := make([][]byte, 1+len(members))
-	bs[0] = []byte(*keyvaluestore.ToString(member))
-	for i, member := range members {
-		bs[i+1] = []byte(*keyvaluestore.ToString(member))
-	}
-	i := 0
-	for {
-		input := &dynamodb.UpdateItemInput{
-			Key:              setKey(key, i),
-			TableName:        aws.String(b.TableName),
-			UpdateExpression: aws.String("ADD v :v SET c = if_not_exists(c, :c)"),
-			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":v": &dynamodb.AttributeValue{
-					BS: bs,
-				},
-				":c": &dynamodb.AttributeValue{
-					BOOL: aws.Bool(false),
-				},
+	if _, err := b.Client.UpdateItem(&dynamodb.UpdateItemInput{
+		Key:              compositeKey(key, "_"),
+		TableName:        aws.String(b.TableName),
+		UpdateExpression: aws.String("ADD v :v"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":v": &dynamodb.AttributeValue{
+				BS: serializeSMembers(member, members...),
 			},
-			ReturnValues: aws.String(dynamodb.ReturnValueAllNew),
-		}
-		if i > 0 {
-			input.ConditionExpression = aws.String("attribute_exists(c)")
-		}
-
-		_, err := b.Client.UpdateItem(input)
-		if err == nil {
-			return nil
-		}
-
-		awserr, ok := err.(awserr.Error)
-		if !ok {
-			return errors.Wrap(err, "dynamodb update item request error")
-		}
-		code := awserr.Code()
-
-		if code == "ConditionalCheckFailedException" {
-			// Create a new item, then try again.
-			if _, err := b.Client.UpdateItem(&dynamodb.UpdateItemInput{
-				Key:              setKey(key, i-1),
-				TableName:        aws.String(b.TableName),
-				UpdateExpression: aws.String("SET c = :c"),
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-					":c": &dynamodb.AttributeValue{
-						BOOL: aws.Bool(true),
-					},
-				},
-			}); err != nil {
-				return errors.Wrap(err, "update item request error")
-			}
-
-			if _, err = b.Client.UpdateItem(&dynamodb.UpdateItemInput{
-				Key:              setKey(key, i),
-				TableName:        aws.String(b.TableName),
-				UpdateExpression: aws.String("SET c = :c"),
-				ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-					":c": &dynamodb.AttributeValue{
-						BOOL: aws.Bool(false),
-					},
-				},
-			}); err != nil {
-				return errors.Wrap(err, "update item request error")
-			}
-		} else if code == "ValidationException" && strings.Contains(awserr.Message(), "size") {
-			// Try the next item.
-			i++
-		} else {
-			return errors.Wrap(err, "dynamodb update item request error")
-		}
+		},
+	}); err != nil {
+		return errors.Wrap(err, "dynamodb update item request error")
 	}
+	return nil
 }
 
 func (b *Backend) SRem(key string, member interface{}, members ...interface{}) error {
-	bs := make([][]byte, 1+len(members))
-	bs[0] = []byte(*keyvaluestore.ToString(member))
-	for i, member := range members {
-		bs[i+1] = []byte(*keyvaluestore.ToString(member))
-	}
-
-	for i := 0; ; i++ {
-		result, err := b.Client.UpdateItem(&dynamodb.UpdateItemInput{
-			Key:              setKey(key, i),
-			TableName:        aws.String(b.TableName),
-			UpdateExpression: aws.String("DELETE v :v"),
-			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":v": &dynamodb.AttributeValue{
-					BS: bs,
-				},
+	if _, err := b.Client.UpdateItem(&dynamodb.UpdateItemInput{
+		Key:              compositeKey(key, "_"),
+		TableName:        aws.String(b.TableName),
+		UpdateExpression: aws.String("DELETE v :v"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":v": &dynamodb.AttributeValue{
+				BS: serializeSMembers(member, members...),
 			},
-			ReturnValues: aws.String(dynamodb.ReturnValueAllOld),
-		})
-		if err != nil {
-			return errors.Wrap(err, "dynamodb update item request error")
-		}
-		if result.Attributes == nil || result.Attributes["c"].BOOL == nil || !*result.Attributes["c"].BOOL {
-			return nil
-		}
+		},
+	}); err != nil {
+		return errors.Wrap(err, "dynamodb update item request error")
 	}
+	return nil
 }
 
 func (b *Backend) SMembers(key string) ([]string, error) {
-	var members []string
-	var membersMap map[string]struct{}
-
-	var startKey map[string]*dynamodb.AttributeValue
-
-	for {
-		input := &dynamodb.QueryInput{
-			TableName:              aws.String(b.TableName),
-			ConsistentRead:         aws.Bool(!b.AllowEventuallyConsistentReads),
-			KeyConditionExpression: aws.String("hk = :hash"),
-			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":hash": attributeValue(key),
-			},
-			ExclusiveStartKey: startKey,
-		}
-		result, err := b.Client.Query(input)
-		if err != nil {
-			return nil, errors.Wrap(err, "dynamodb query request error")
-		}
-		for _, item := range result.Items {
-			if len(members) > 0 {
-				if membersMap == nil {
-					membersMap = make(map[string]struct{}, len(members))
-					for _, member := range members {
-						membersMap[member] = struct{}{}
-					}
-				}
-				for _, member := range attributeStringSliceValue(item["v"]) {
-					if _, ok := membersMap[member]; !ok {
-						members = append(members, member)
-						membersMap[member] = struct{}{}
-					}
-				}
-			} else {
-				members = attributeStringSliceValue(item["v"])
-			}
-		}
-		if result.LastEvaluatedKey == nil {
-			break
-		}
-		startKey = result.LastEvaluatedKey
+	result, err := b.Client.GetItem(&dynamodb.GetItemInput{
+		Key:            compositeKey(key, "_"),
+		TableName:      aws.String(b.TableName),
+		ConsistentRead: aws.Bool(!b.AllowEventuallyConsistentReads),
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "dynamodb get item request error")
 	}
-
-	return members, nil
+	if result.Item == nil || result.Item["v"] == nil {
+		return nil, nil
+	}
+	return attributeStringSliceValue(result.Item["v"]), nil
 }
 
 const floatSortKeyNumBytes = 8
@@ -691,10 +612,6 @@ func (b *Backend) zRangeByLex(key, min, max string, limit int, reverse, secondar
 		startKey = result.LastEvaluatedKey
 	}
 	return members, nil
-}
-
-func (b *Backend) CAS(key string, transform func(prev *string) (interface{}, error)) (bool, error) {
-	return b.checkAndSet(key, "_", "v", transform, nil)
 }
 
 func (b *Backend) checkAndSet(key string, sortKey string, attributeToChange string, transform func(prev *string) (interface{}, error), otherValues map[string]interface{}) (bool, error) {

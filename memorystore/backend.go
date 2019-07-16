@@ -53,30 +53,6 @@ func (b *Backend) AtomicWrite() keyvaluestore.AtomicWriteOperation {
 	}
 }
 
-func (b *Backend) CAS(key string, transform func(prev *string) (interface{}, error)) (bool, error) {
-	before, err := b.Get(key)
-	if err != nil {
-		return false, err
-	}
-
-	newValue, err := transform(before)
-	if err != nil {
-		return false, err
-	} else if newValue == nil {
-		return true, nil
-	}
-
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
-	if v, ok := b.m[key]; (ok && (before == nil || v != *before)) || (!ok && before != nil) {
-		return false, nil
-	}
-
-	b.m[key] = newValue
-	return true, nil
-}
-
 func (b *Backend) Get(key string) (*string, error) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
@@ -203,6 +179,18 @@ func (b *Backend) SetXX(key string, value interface{}) (bool, error) {
 	return true, nil
 }
 
+func (b *Backend) SetEQ(key string, value, oldValue interface{}) (bool, error) {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+
+	if v, ok := b.m[key]; !ok || *keyvaluestore.ToString(v) != *keyvaluestore.ToString(oldValue) {
+		return false, nil
+	}
+
+	b.m[key] = value
+	return true, nil
+}
+
 const floatSortKeyNumBytes = 8
 
 func floatSortKey(f float64) string {
@@ -320,7 +308,10 @@ func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error)
 func (b *Backend) ZRem(key string, member interface{}) error {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
+	return b.zrem(key, member)
+}
 
+func (b *Backend) zrem(key string, member interface{}) error {
 	s, _ := b.m[key].(*sortedSet)
 	if s != nil {
 		v := *keyvaluestore.ToString(member)
