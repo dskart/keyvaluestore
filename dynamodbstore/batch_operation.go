@@ -121,7 +121,7 @@ func (op *BatchOperation) execReads() error {
 		i++
 	}
 	for key := range op.smemberss {
-		keys[i] = setKey(key, 0)
+		keys[i] = compositeKey(key, "_")
 		i++
 	}
 
@@ -172,14 +172,7 @@ func (op *BatchOperation) execReads() error {
 						get.value = attributeStringValue(item["v"])
 					}
 					if smembers, ok := op.smemberss[key]; ok {
-						if item["c"].BOOL != nil && *item["c"].BOOL {
-							smembers.members, smembers.err = op.Backend.SMembers(key)
-							if smembers.err != nil {
-								ret = smembers.err
-							}
-						} else {
-							smembers.members = attributeStringSliceValue(item["v"])
-						}
+						smembers.members = attributeStringSliceValue(item["v"])
 					}
 				}
 

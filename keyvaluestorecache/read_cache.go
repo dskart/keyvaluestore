@@ -104,12 +104,6 @@ func (c *ReadCache) Set(key string, value interface{}) error {
 	return err
 }
 
-func (c *ReadCache) CAS(key string, transform func(v *string) (interface{}, error)) (success bool, err error) {
-	success, err = c.backend.CAS(key, transform)
-	c.Invalidate(key)
-	return success, err
-}
-
 func (c *ReadCache) AddInt(key string, n int64) (int64, error) {
 	n, err := c.backend.AddInt(key, n)
 	c.Invalidate(key)
@@ -124,6 +118,12 @@ func (c *ReadCache) SetXX(key string, value interface{}) (bool, error) {
 
 func (c *ReadCache) SetNX(key string, value interface{}) (bool, error) {
 	ok, err := c.backend.SetNX(key, value)
+	c.Invalidate(key)
+	return ok, err
+}
+
+func (c *ReadCache) SetEQ(key string, value, oldValue interface{}) (bool, error) {
+	ok, err := c.backend.SetEQ(key, value, oldValue)
 	c.Invalidate(key)
 	return ok, err
 }

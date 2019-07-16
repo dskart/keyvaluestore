@@ -36,31 +36,6 @@ func (b *Backend) AtomicWrite() keyvaluestore.AtomicWriteOperation {
 	}
 }
 
-func (b *Backend) CAS(key string, transform func(prev *string) (interface{}, error)) (bool, error) {
-	err := b.Client.Watch(func(tx *redis.Tx) error {
-		before, err := b.Get(key)
-		if err != nil {
-			return err
-		}
-
-		newValue, err := transform(before)
-		if err != nil {
-			return err
-		} else if newValue == nil {
-			return nil
-		}
-
-		_, err = tx.TxPipelined(func(pipe redis.Pipeliner) error {
-			return pipe.Set(key, newValue, 0).Err()
-		})
-		return err
-	}, key)
-	if err == redis.TxFailedErr {
-		return false, nil
-	}
-	return err == nil, err
-}
-
 func (b *Backend) Delete(key string) (bool, error) {
 	result := b.Client.Del(key)
 	return result.Val() > 0, result.Err()
@@ -106,6 +81,25 @@ func (b *Backend) SetNX(key string, value interface{}) (bool, error) {
 
 func (b *Backend) SetXX(key string, value interface{}) (bool, error) {
 	return b.Client.SetXX(key, value, 0).Result()
+}
+
+func (b *Backend) SetEQ(key string, value, oldValue interface{}) (bool, error) {
+	err := b.Client.Watch(func(tx *redis.Tx) error {
+		if before, err := b.Get(key); err != nil {
+			return err
+		} else if before == nil || *before != *keyvaluestore.ToString(oldValue) {
+			return redis.TxFailedErr
+		}
+
+		_, err := tx.TxPipelined(func(pipe redis.Pipeliner) error {
+			return pipe.Set(key, value, 0).Err()
+		})
+		return err
+	}, key)
+	if err == redis.TxFailedErr {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func (b *Backend) ZAdd(key string, member interface{}, score float64) error {

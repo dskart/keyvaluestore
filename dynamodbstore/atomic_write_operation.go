@@ -58,7 +58,7 @@ func (op *AtomicWriteOperation) SetNX(key string, value interface{}) keyvaluesto
 	})
 }
 
-func (op *AtomicWriteOperation) CAS(key string, oldValue, newValue string) keyvaluestore.AtomicWriteResult {
+func (op *AtomicWriteOperation) SetEQ(key string, value, oldValue interface{}) keyvaluestore.AtomicWriteResult {
 	return op.write(dynamodb.TransactWriteItem{
 		Put: &dynamodb.Put{
 			ConditionExpression: aws.String("v = :v"),
@@ -66,7 +66,7 @@ func (op *AtomicWriteOperation) CAS(key string, oldValue, newValue string) keyva
 				":v": attributeValue(oldValue),
 			},
 			Item: newItem(key, "_", map[string]*dynamodb.AttributeValue{
-				"v": attributeValue(newValue),
+				"v": attributeValue(value),
 			}),
 			TableName: &op.Backend.TableName,
 		},
@@ -91,6 +91,46 @@ func (op *AtomicWriteOperation) ZAdd(key string, member interface{}, score float
 				"v":   attributeValue(s),
 				"rk2": attributeValue(floatSortKey(score) + s),
 			}),
+		},
+	})
+}
+
+func (op *AtomicWriteOperation) ZRem(key string, member interface{}) keyvaluestore.AtomicWriteResult {
+	s := *keyvaluestore.ToString(member)
+	return op.write(dynamodb.TransactWriteItem{
+		Delete: &dynamodb.Delete{
+			TableName: &op.Backend.TableName,
+			Key:       compositeKey(key, s),
+		},
+	})
+}
+
+func (op *AtomicWriteOperation) SAdd(key string, member interface{}, members ...interface{}) keyvaluestore.AtomicWriteResult {
+	return op.write(dynamodb.TransactWriteItem{
+		Update: &dynamodb.Update{
+			Key:              compositeKey(key, "_"),
+			TableName:        &op.Backend.TableName,
+			UpdateExpression: aws.String("ADD v :v"),
+			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+				":v": &dynamodb.AttributeValue{
+					BS: serializeSMembers(member, members...),
+				},
+			},
+		},
+	})
+}
+
+func (op *AtomicWriteOperation) SRem(key string, member interface{}, members ...interface{}) keyvaluestore.AtomicWriteResult {
+	return op.write(dynamodb.TransactWriteItem{
+		Update: &dynamodb.Update{
+			Key:              compositeKey(key, "_"),
+			TableName:        &op.Backend.TableName,
+			UpdateExpression: aws.String("DELETE v :v"),
+			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+				":v": &dynamodb.AttributeValue{
+					BS: serializeSMembers(member, members...),
+				},
+			},
 		},
 	})
 }

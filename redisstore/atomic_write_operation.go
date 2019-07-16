@@ -51,12 +51,12 @@ func (op *AtomicWriteOperation) SetNX(key string, value interface{}) keyvaluesto
 	})
 }
 
-func (op *AtomicWriteOperation) CAS(key string, oldValue, newValue string) keyvaluestore.AtomicWriteResult {
+func (op *AtomicWriteOperation) SetEQ(key string, value, oldValue interface{}) keyvaluestore.AtomicWriteResult {
 	return op.write(&atomicWriteOperation{
 		key:       key,
 		condition: "redis.call('get', $@) == $0",
 		write:     "redis.call('set', $@, $1)",
-		args:      []interface{}{oldValue, newValue},
+		args:      []interface{}{oldValue, value},
 	})
 }
 
@@ -74,6 +74,41 @@ func (op *AtomicWriteOperation) ZAdd(key string, member interface{}, score float
 		condition: "true",
 		write:     "redis.call('zadd', $@, $1, $0)",
 		args:      []interface{}{member, score},
+	})
+}
+
+func (op *AtomicWriteOperation) ZRem(key string, member interface{}) keyvaluestore.AtomicWriteResult {
+	return op.write(&atomicWriteOperation{
+		key:       key,
+		condition: "true",
+		write:     "redis.call('zrem', $@, $0)",
+		args:      []interface{}{member},
+	})
+}
+
+func (op *AtomicWriteOperation) SAdd(key string, member interface{}, members ...interface{}) keyvaluestore.AtomicWriteResult {
+	placeholders := make([]string, 1+len(members))
+	for i := 0; i < len(placeholders); i++ {
+		placeholders[i] = fmt.Sprintf("$%v", i)
+	}
+	return op.write(&atomicWriteOperation{
+		key:       key,
+		condition: "true",
+		write:     "redis.call('sadd', $@, " + strings.Join(placeholders, ", ") + ")",
+		args:      append([]interface{}{member}, members...),
+	})
+}
+
+func (op *AtomicWriteOperation) SRem(key string, member interface{}, members ...interface{}) keyvaluestore.AtomicWriteResult {
+	placeholders := make([]string, 1+len(members))
+	for i := 0; i < len(placeholders); i++ {
+		placeholders[i] = fmt.Sprintf("$%v", i)
+	}
+	return op.write(&atomicWriteOperation{
+		key:       key,
+		condition: "true",
+		write:     "redis.call('srem', $@, " + strings.Join(placeholders, ", ") + ")",
+		args:      append([]interface{}{member}, members...),
 	})
 }
 

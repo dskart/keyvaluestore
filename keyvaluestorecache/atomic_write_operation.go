@@ -19,9 +19,9 @@ func (op *readCacheAtomicWriteOperation) SetNX(key string, value interface{}) ke
 	return op.atomicWrite.SetNX(key, value)
 }
 
-func (op *readCacheAtomicWriteOperation) CAS(key string, oldValue, newValue string) keyvaluestore.AtomicWriteResult {
+func (op *readCacheAtomicWriteOperation) SetEQ(key string, value, oldValue interface{}) keyvaluestore.AtomicWriteResult {
 	op.invalidations = append(op.invalidations, key)
-	return op.atomicWrite.CAS(key, oldValue, newValue)
+	return op.atomicWrite.SetEQ(key, value, oldValue)
 }
 
 func (op *readCacheAtomicWriteOperation) Delete(key string) keyvaluestore.AtomicWriteResult {
@@ -32,6 +32,21 @@ func (op *readCacheAtomicWriteOperation) Delete(key string) keyvaluestore.Atomic
 func (op *readCacheAtomicWriteOperation) ZAdd(key string, member interface{}, score float64) keyvaluestore.AtomicWriteResult {
 	op.invalidations = append(op.invalidations, key)
 	return op.atomicWrite.ZAdd(key, member, score)
+}
+
+func (op *readCacheAtomicWriteOperation) ZRem(key string, member interface{}) keyvaluestore.AtomicWriteResult {
+	op.invalidations = append(op.invalidations, key)
+	return op.atomicWrite.ZRem(key, member)
+}
+
+func (op *readCacheAtomicWriteOperation) SAdd(key string, member interface{}, members ...interface{}) keyvaluestore.AtomicWriteResult {
+	op.invalidations = append(op.invalidations, key)
+	return op.atomicWrite.SAdd(key, member, members...)
+}
+
+func (op *readCacheAtomicWriteOperation) SRem(key string, member interface{}, members ...interface{}) keyvaluestore.AtomicWriteResult {
+	op.invalidations = append(op.invalidations, key)
+	return op.atomicWrite.SRem(key, member, members...)
 }
 
 func (op *readCacheAtomicWriteOperation) Exec() (bool, error) {
