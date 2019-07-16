@@ -35,6 +35,17 @@ func (op *AtomicWriteOperation) write(item dynamodb.TransactWriteItem) *atomicWr
 	return ret
 }
 
+func (op *AtomicWriteOperation) Set(key string, value interface{}) keyvaluestore.AtomicWriteResult {
+	return op.write(dynamodb.TransactWriteItem{
+		Put: &dynamodb.Put{
+			Item: newItem(key, "_", map[string]*dynamodb.AttributeValue{
+				"v": attributeValue(value),
+			}),
+			TableName: &op.Backend.TableName,
+		},
+	})
+}
+
 func (op *AtomicWriteOperation) SetNX(key string, value interface{}) keyvaluestore.AtomicWriteResult {
 	return op.write(dynamodb.TransactWriteItem{
 		Put: &dynamodb.Put{
