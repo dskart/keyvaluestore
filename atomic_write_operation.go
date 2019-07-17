@@ -1,7 +1,7 @@
 package keyvaluestore
 
 type AtomicWriteResult interface {
-	// Returns false if the transaction failed due to this operation's conditional failing.
+	// Returns true if the transaction failed due to this operation's conditional failing.
 	ConditionalFailed() bool
 }
 
