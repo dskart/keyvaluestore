@@ -37,11 +37,11 @@ Building off of the previous example, if you have a user's id, you can retrieve 
 ```go
 func (s *Store) GetUserById(id model.Id) (*model.User, error) {
     serialized, err := s.backend.Get("user:" + string(id))
-    if err != nil {
+    if serialized == nil {
         return nil, err
     }
     var user *model.User
-    if err := json.Unmarshal(serialized, &user); err != nil {
+    if err := json.Unmarshal([]byte(*serialized), &user); err != nil {
         return nil, err
     }
     return user, nil
