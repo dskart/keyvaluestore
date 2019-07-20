@@ -1,8 +1,124 @@
-# keyvaluestore [![Documentation](https://godoc.org/github.com/ccbrown/keyvaluestore?status.svg)](https://godoc.org/github.com/ccbrown/keyvaluestore)
+# keyvaluestore [![Build Status](https://travis-ci.org/ccbrown/keyvaluestore.svg?branch=master)](https://travis-ci.org/ccbrown/keyvaluestore) [![Documentation](https://godoc.org/github.com/ccbrown/keyvaluestore?status.svg)](https://godoc.org/github.com/ccbrown/keyvaluestore)
 
 This package provides an interface that can be used to build robust applications on top of key-value stores. It supports profiling, caching, batching, eventual consistency, and transactions. It has implementations for Redis, which is ideal for dev environments, DynamoDB, which is ideal in production, and an in-memory store, which is ideal for tests.
 
 This project originated at the AAF, where it was used in production until the company went bankrupt. I (@ccbrown) believe it's the best way to use DynamoDB in Go applications, so I'm continuing to maintain it and use it for other projects.
+
+## Examples
+
+We're going to assume you have a struct representing your persistence layer like so:
+
+```go
+type Store struct {
+    backend keyvaluestore.Backend
+}
+```
+
+See the section below on backends for details on how to initialize the `backend` field.
+
+### Storing an Object
+
+```go
+func (s *Store) AddUser(user *model.User) error {
+    serialized, err := json.Marshal(user)
+    if err != nil {
+        return err
+    }
+    return s.backend.Set("user:" + string(user.Id), serialized)
+}
+```
+
+This is the simplest way to store an object: Serialize it (JSON or [MessagePack](https://msgpack.org) works well), then use `Set` to store it. Alternatively, you could just implement [BinaryMarshaler](https://golang.org/pkg/encoding/#BinaryMarshaler) on your objects and skip the serialization step here.
+
+### Getting an Object
+
+Building off of the previous example, if you have a user's id, you can retrieve them like so:
+
+```go
+func (s *Store) GetUserById(id model.Id) (*model.User, error) {
+    serialized, err := s.backend.Get("user:" + string(id))
+    if err != nil {
+        return nil, err
+    }
+    var user *model.User
+    if err := json.Unmarshal(serialized, &user); err != nil {
+        return nil, err
+    }
+    return user, nil
+}
+```
+
+### Storing an Object, Part 2
+
+The first example has two big problems:
+
+1. Users aren't accessible unless you have their id and there's no way to enumerate them.
+2. It doesn't enforce uniqueness constraints for usernames or email addresses. (Let's assume all our users have usernames and email addresses.)
+
+The first problem can be solved most easily solved with sorted sets: simply add all users to a sorted set, which can be easily enumerated later. The second problem requires the use of transactions. In this case, the type of transaction we want is an atomic write operation.
+
+```go
+var ErrEmailAddressInUse = fmt.Errorf("email address in use")
+var ErrUsernameInUse = fmt.Errorf("user name in use")
+
+func (s *Store) AddUser(user *model.User) error {
+    serialized, err := json.Marshal(user)
+    if err != nil {
+        return err
+    }
+
+    tx := s.backend.AtomicWrite()
+    tx.Set("user:" + string(user.Id), serialized)
+    tx.ZAdd("usernames", user.Username, 0.0)
+    usernameSet := tx.SetNX("user_by_username:"+user.Username, user.Id)
+    tx.SetNX("user_by_email_address:"+user.EmailAddress, user.Id)
+
+    if didCommit, err := tx.Exec(); err != nil {
+        return err
+    } else if didCommit {
+        return nil
+    } else if usernameSet.ConditionalFailed() {
+        return ErrUsernameInUse
+    }
+    return ErrEmailAddressInUse
+}
+```
+
+This implementation now covers all the bases:
+
+* We can enumerate users, sorted by username, by iterating over the "usernames" set.
+* If the username is already taken, the transaction will be aborted and the function will return `ErrUsernameInUse`.
+* If the email address is already taken, the transaction will be aborted and the function will return `ErrEmailAddressInUse`.
+* We also have the ability to look up users by their username or email address.
+
+### Getting Multiple Objects
+
+In many scenarios, you'll want to fetch more than one user at once. If you made one round-trip to the backend per user, this would be very slow. To efficiently fetch multiple objects or perform multiple operations, you can use batching:
+
+```go
+func (s *Store) GetUsersByIds(ids ...model.Id) ([]*model.User, error) {
+    batch := s.backend.Batch()
+    gets := make([]keyvaluestore.GetResult, len(ids))
+    for i, id := range ids {
+        gets[i] = batch.Get("user:" + string(id))
+    }
+    if err := batch.Exec(); err != nil {
+        return nil, err
+    }
+
+    users := make([]*model.User, 0, len(gets))
+    for _, get := range gets {
+        if v, _ := get.Result(); v != nil {
+            var user *model.User
+            if err := json.Unmarshal(*v, &user); err != nil {
+                return nil, err
+            }
+            users = append(users, user)
+        }
+    }
+    return users, nil
+}
+```
 
 ## Backends
 
@@ -79,3 +195,5 @@ backend := &KeyValueStore{
 }
 backend.Set("foo", "bar")
 ```
+
+You can also create the backend using a DAX client for improved performance.
