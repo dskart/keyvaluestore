@@ -6,7 +6,7 @@ This project originated at the AAF, where it was used in production until the co
 
 ## Examples
 
-We're going to assume you have a struct representing your persistence layer like so:
+Let's assume you have a struct representing your persistence layer like so:
 
 ```go
 type Store struct {
@@ -55,11 +55,11 @@ The first example has two big problems:
 1. Users aren't accessible unless you have their id and there's no way to enumerate them.
 2. It doesn't enforce uniqueness constraints for usernames or email addresses. (Let's assume all our users have usernames and email addresses.)
 
-The first problem can be most easily solved with sorted sets: simply add all users to a sorted set, which can be easily enumerated later. The second problem requires the use of transactions. In this case, the type of transaction we want is an atomic write operation.
+The first problem can be most easily solved with sorted sets: Simply add all users to a sorted set, which can be easily enumerated later. The second problem requires the use of transactions. In this case, the type of transaction we want is an atomic write operation.
 
 ```go
 var ErrEmailAddressInUse = fmt.Errorf("email address in use")
-var ErrUsernameInUse = fmt.Errorf("user name in use")
+var ErrUsernameInUse = fmt.Errorf("username in use")
 
 func (s *Store) AddUser(user *model.User) error {
     serialized, err := json.Marshal(user)
