@@ -55,7 +55,7 @@ The first example has two big problems:
 1. Users aren't accessible unless you have their id and there's no way to enumerate them.
 2. It doesn't enforce uniqueness constraints for usernames or email addresses. (Let's assume all our users have usernames and email addresses.)
 
-The first problem can be solved most easily solved with sorted sets: simply add all users to a sorted set, which can be easily enumerated later. The second problem requires the use of transactions. In this case, the type of transaction we want is an atomic write operation.
+The first problem can be most easily solved with sorted sets: simply add all users to a sorted set, which can be easily enumerated later. The second problem requires the use of transactions. In this case, the type of transaction we want is an atomic write operation.
 
 ```go
 var ErrEmailAddressInUse = fmt.Errorf("email address in use")
