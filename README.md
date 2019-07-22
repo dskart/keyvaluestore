@@ -110,7 +110,7 @@ func (s *Store) GetUsersByIds(ids ...model.Id) ([]*model.User, error) {
     for _, get := range gets {
         if v, _ := get.Result(); v != nil {
             var user *model.User
-            if err := json.Unmarshal(*v, &user); err != nil {
+            if err := json.Unmarshal([]byte(*v), &user); err != nil {
                 return nil, err
             }
             users = append(users, user)
