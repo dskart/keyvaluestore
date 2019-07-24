@@ -82,6 +82,19 @@ func (op *AtomicWriteOperation) Delete(key string) keyvaluestore.AtomicWriteResu
 	})
 }
 
+func (op *AtomicWriteOperation) IncrBy(key string, n int64) keyvaluestore.AtomicWriteResult {
+	return op.write(dynamodb.TransactWriteItem{
+		Update: &dynamodb.Update{
+			Key:              compositeKey(key, "_"),
+			TableName:        &op.Backend.TableName,
+			UpdateExpression: aws.String("ADD v :n"),
+			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+				":n": attributeValue(n),
+			},
+		},
+	})
+}
+
 func (op *AtomicWriteOperation) ZAdd(key string, member interface{}, score float64) keyvaluestore.AtomicWriteResult {
 	s := *keyvaluestore.ToString(member)
 	return op.write(dynamodb.TransactWriteItem{

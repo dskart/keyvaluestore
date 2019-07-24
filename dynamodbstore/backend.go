@@ -76,7 +76,7 @@ func attributeValue(v interface{}) *dynamodb.AttributeValue {
 	panic(fmt.Sprintf("unsupported value type: %T", v))
 }
 
-func (b *Backend) AddInt(key string, n int64) (int64, error) {
+func (b *Backend) IncrBy(key string, n int64) (int64, error) {
 	result, err := b.Client.UpdateItem(&dynamodb.UpdateItemInput{
 		Key:              compositeKey(key, "_"),
 		TableName:        aws.String(b.TableName),

@@ -14,8 +14,9 @@ type Backend interface {
 	Get(key string) (*string, error)
 	Set(key string, value interface{}) error
 
-	// Add an integer to an integer value. Or set if the key doesn't exist.
-	AddInt(key string, n int64) (int64, error)
+	// Increments the given key by some number. If the key doesn't exist, it's set to the given
+	// number instead.
+	IncrBy(key string, n int64) (int64, error)
 
 	// Set if the key already exists.
 	SetXX(key string, value interface{}) (bool, error)

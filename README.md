@@ -183,8 +183,7 @@ If you're using CloudFormation, you can just copy/paste that into your template.
 Then you can connect to it like so:
 
 ```go
-awsConfig := defaults.Get().Config.WithMaxRetries(5)
-session := session.Must(session.NewSession(awsConfig))
+session := session.Must(session.NewSession())
 backend := &KeyValueStore{
     backend: &dynamodbstore.Backend{
         Client: &dynamodbstore.AWSBackendClient{

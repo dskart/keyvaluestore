@@ -67,6 +67,14 @@ func (op *AtomicWriteOperation) Delete(key string) keyvaluestore.AtomicWriteResu
 	})
 }
 
+func (op *AtomicWriteOperation) IncrBy(key string, n int64) keyvaluestore.AtomicWriteResult {
+	return op.write(&atomicWriteOperation{
+		write: func() {
+			op.Backend.incrBy(key, n)
+		},
+	})
+}
+
 func (op *AtomicWriteOperation) ZAdd(key string, member interface{}, score float64) keyvaluestore.AtomicWriteResult {
 	return op.write(&atomicWriteOperation{
 		write: func() {
