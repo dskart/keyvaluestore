@@ -5,7 +5,7 @@ type AtomicWriteResult interface {
 	ConditionalFailed() bool
 }
 
-// DynamoDB can't do more than 25 operations in an atomic write. So all stores should enforce this
+// DynamoDB can't do more than 25 operations in an atomic write so all backends should enforce this
 // limit.
 const MaxAtomicWriteOperations = 25
 
@@ -22,6 +22,10 @@ type AtomicWriteOperation interface {
 
 	// Deletes a key. No conditionals are applied.
 	Delete(key string) AtomicWriteResult
+
+	// Increments the given key by some number. If the key doesn't exist, it's set to the given
+	// number instead. No conditionals are applied.
+	IncrBy(key string, n int64) AtomicWriteResult
 
 	// Adds a member to a sorted set. No conditionals are applied.
 	ZAdd(key string, member interface{}, score float64) AtomicWriteResult

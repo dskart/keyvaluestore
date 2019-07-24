@@ -102,6 +102,35 @@ func TestBackendAtomicWrite(t *testing.T, newBackend func() keyvaluestore.Backen
 		assert.Nil(t, got)
 	})
 
+	t.Run("IncrBy", func(t *testing.T) {
+		assert.NoError(t, b.Set("foo", "bar"))
+		_, err := b.Delete("notset")
+		assert.NoError(t, err)
+
+		tx := b.AtomicWrite()
+		defer assertConditionFail(t, tx.SetNX("foo", "bar"))
+		tx.IncrBy("n", 1)
+		ok, err := tx.Exec()
+		assert.NoError(t, err)
+		assert.False(t, ok)
+
+		got, err := b.Get("n")
+		assert.NoError(t, err)
+		assert.Nil(t, got)
+
+		tx = b.AtomicWrite()
+		defer assertConditionPass(t, tx.SetNX("notset", "baz"))
+		tx.IncrBy("n", 1)
+		ok, err = tx.Exec()
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		got, err = b.Get("n")
+		assert.NoError(t, err)
+		require.NotNil(t, got)
+		assert.Equal(t, "1", *got)
+	})
+
 	t.Run("SetEQ", func(t *testing.T) {
 		assert.NoError(t, b.Set("foo", 1))
 		assert.NoError(t, b.Set("deleteme", "bar"))
@@ -214,11 +243,11 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 		})
 	})
 
-	t.Run("AddInt", func(t *testing.T) {
+	t.Run("IncrBy", func(t *testing.T) {
 		b := newBackend()
 
 		t.Run("New", func(t *testing.T) {
-			n, err := b.AddInt("foo", 2)
+			n, err := b.IncrBy("foo", 2)
 			assert.EqualValues(t, 2, n)
 			assert.NoError(t, err)
 
@@ -236,7 +265,7 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 			assert.NoError(t, err)
 			assert.Equal(t, "1", *v)
 
-			n, err := b.AddInt("foo", 2)
+			n, err := b.IncrBy("foo", 2)
 			assert.EqualValues(t, 3, n)
 			assert.NoError(t, err)
 
