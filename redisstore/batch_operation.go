@@ -42,14 +42,6 @@ type RedisCmd interface {
 	Err() error
 }
 
-type DeleteResult struct {
-	*redis.IntCmd
-}
-
-func (r *DeleteResult) Result() (bool, error) {
-	return r.IntCmd.Val() > 0, r.IntCmd.Err()
-}
-
 type ErrorResult struct {
 	RedisCmd
 }
@@ -70,8 +62,8 @@ func (op *BatchOperation) Set(key string, value interface{}) keyvaluestore.Error
 	}
 }
 
-func (op *BatchOperation) Delete(key string) keyvaluestore.DeleteResult {
-	return &DeleteResult{
+func (op *BatchOperation) Delete(key string) keyvaluestore.ErrorResult {
+	return &ErrorResult{
 		op.pipe.Del(key),
 	}
 }
@@ -106,6 +98,26 @@ func (op *BatchOperation) ZAdd(key string, member interface{}, score float64) ke
 func (op *BatchOperation) ZRem(key string, member interface{}) keyvaluestore.ErrorResult {
 	return &ErrorResult{
 		op.pipe.ZRem(key, member),
+	}
+}
+
+type ZScoreResult struct {
+	*redis.FloatCmd
+}
+
+func (r *ZScoreResult) Result() (*float64, error) {
+	v, err := r.FloatCmd.Result()
+	if err == redis.Nil {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (op *BatchOperation) ZScore(key string, member interface{}) keyvaluestore.ZScoreResult {
+	return &ZScoreResult{
+		op.pipe.ZScore(key, *keyvaluestore.ToString(member)),
 	}
 }
 

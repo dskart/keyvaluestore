@@ -7,6 +7,7 @@ type readCacheBatchOperation struct {
 
 	tryCache       []func()
 	getMisses      []boGetMiss
+	zscoreMisses   []boZScoreMiss
 	smembersMisses []boSMembersMiss
 	batch          keyvaluestore.BatchOperation
 	invalidations  []string
@@ -17,6 +18,13 @@ type boGetMiss struct {
 	Key    string
 	Dest   *boGetResult
 	Source keyvaluestore.GetResult
+}
+
+type boZScoreMiss struct {
+	Key    string
+	Member string
+	Dest   *boZScoreResult
+	Source keyvaluestore.ZScoreResult
 }
 
 type boSMembersMiss struct {
@@ -55,7 +63,7 @@ func (op *readCacheBatchOperation) Get(key string) keyvaluestore.GetResult {
 	return result
 }
 
-func (op *readCacheBatchOperation) Delete(key string) keyvaluestore.DeleteResult {
+func (op *readCacheBatchOperation) Delete(key string) keyvaluestore.ErrorResult {
 	op.invalidations = append(op.invalidations, key)
 	return op.batch.Delete(key)
 }
@@ -115,11 +123,45 @@ func (op *readCacheBatchOperation) ZRem(key string, member interface{}) keyvalue
 	return op.batch.ZRem(key, member)
 }
 
+type boZScoreResult struct {
+	score *float64
+	err   error
+}
+
+func (r *boZScoreResult) Result() (*float64, error) {
+	return r.score, r.err
+}
+
+func (op *readCacheBatchOperation) ZScore(key string, member interface{}) keyvaluestore.ZScoreResult {
+	result := &boZScoreResult{}
+	op.tryCache = append(op.tryCache, func() {
+		s := *keyvaluestore.ToString(member)
+		subkey := concatKeys("zs", s)
+		v, _ := op.ReadCache.load(key)
+		if zEntry, ok := v.(readCacheZEntry); ok {
+			if entry, ok := zEntry.subcache[subkey].(readCacheZScoreEntry); ok {
+				result.score, result.err = entry.score, entry.err
+				if result.err != nil && op.firstError == nil {
+					op.firstError = result.err
+				}
+				return
+			}
+		}
+		op.zscoreMisses = append(op.zscoreMisses, boZScoreMiss{
+			Key:    key,
+			Member: s,
+			Dest:   result,
+			Source: op.batch.ZScore(key, member),
+		})
+	})
+	return result
+}
+
 func (op *readCacheBatchOperation) Exec() error {
 	for _, f := range op.tryCache {
 		f()
 	}
-	if op.firstError != nil || len(op.getMisses)+len(op.smembersMisses)+len(op.invalidations) == 0 {
+	if op.firstError != nil || len(op.getMisses)+len(op.smembersMisses)+len(op.zscoreMisses)+len(op.invalidations) == 0 {
 		return op.firstError
 	}
 	err := op.batch.Exec()
@@ -131,6 +173,7 @@ func (op *readCacheBatchOperation) Exec() error {
 			err:   miss.Dest.err,
 		})
 	}
+
 	for _, miss := range op.smembersMisses {
 		miss.Dest.members, miss.Dest.err = miss.Source.Result()
 		op.ReadCache.store(miss.Key, readCacheSMembersEntry{
@@ -138,6 +181,22 @@ func (op *readCacheBatchOperation) Exec() error {
 			err:     miss.Dest.err,
 		})
 	}
+
+	for _, miss := range op.zscoreMisses {
+		miss.Dest.score, miss.Dest.err = miss.Source.Result()
+		subkey := concatKeys("zs", miss.Member)
+		v, _ := op.ReadCache.load(miss.Key)
+		zEntry, _ := v.(readCacheZEntry)
+		if zEntry.subcache == nil {
+			zEntry.subcache = make(map[string]interface{})
+		}
+		zEntry.subcache[subkey] = readCacheZScoreEntry{
+			score: miss.Dest.score,
+			err:   miss.Dest.err,
+		}
+		op.ReadCache.store(miss.Key, zEntry)
+	}
+
 	for _, key := range op.invalidations {
 		op.ReadCache.cache.Delete(key)
 	}

@@ -431,6 +431,37 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 			assert.NoError(t, err)
 		})
 
+		t.Run("Delete", func(t *testing.T) {
+			b := newBackend()
+
+			batch := b.Batch()
+			batch.Set("foo", "a")
+			batch.Delete("foo")
+			require.NoError(t, batch.Exec())
+
+			foo, err := b.Get("foo")
+			assert.Nil(t, foo)
+			assert.NoError(t, err)
+
+			batch = b.Batch()
+			batch.Delete("foo")
+			require.NoError(t, batch.Exec())
+
+			foo, err = b.Get("foo")
+			assert.Nil(t, foo)
+			assert.NoError(t, err)
+
+			assert.NoError(t, b.Set("foo", "a"))
+
+			batch = b.Batch()
+			batch.Delete("foo")
+			require.NoError(t, batch.Exec())
+
+			foo, err = b.Get("foo")
+			assert.Nil(t, foo)
+			assert.NoError(t, err)
+		})
+
 		t.Run("ZAdd", func(t *testing.T) {
 			b := newBackend()
 
@@ -451,6 +482,28 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 			members, err = b.ZRangeByScore("foo", 0.0, 100.0, 0)
 			assert.Equal(t, []string{"b", "a"}, members)
 			assert.NoError(t, err)
+		})
+
+		t.Run("ZScore", func(t *testing.T) {
+			b := newBackend()
+
+			assert.NoError(t, b.ZAdd("foo", "a", 0.0))
+			assert.NoError(t, b.ZAdd("foo", "b", 10.0))
+
+			batch := b.Batch()
+			rA := batch.ZScore("foo", "a")
+			rB := batch.ZScore("foo", "b")
+			absent := batch.ZScore("foo", "absent")
+			require.NoError(t, batch.Exec())
+
+			score, _ := rA.Result()
+			assert.Equal(t, 0.0, *score)
+
+			score, _ = rB.Result()
+			assert.Equal(t, 10.0, *score)
+
+			score, _ = absent.Result()
+			assert.Nil(t, score)
 		})
 	})
 
