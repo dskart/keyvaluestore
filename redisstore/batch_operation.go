@@ -42,14 +42,6 @@ type RedisCmd interface {
 	Err() error
 }
 
-type DeleteResult struct {
-	*redis.IntCmd
-}
-
-func (r *DeleteResult) Result() (bool, error) {
-	return r.IntCmd.Val() > 0, r.IntCmd.Err()
-}
-
 type ErrorResult struct {
 	RedisCmd
 }
@@ -70,8 +62,8 @@ func (op *BatchOperation) Set(key string, value interface{}) keyvaluestore.Error
 	}
 }
 
-func (op *BatchOperation) Delete(key string) keyvaluestore.DeleteResult {
-	return &DeleteResult{
+func (op *BatchOperation) Delete(key string) keyvaluestore.ErrorResult {
+	return &ErrorResult{
 		op.pipe.Del(key),
 	}
 }

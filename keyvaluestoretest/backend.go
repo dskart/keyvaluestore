@@ -431,6 +431,37 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 			assert.NoError(t, err)
 		})
 
+		t.Run("Delete", func(t *testing.T) {
+			b := newBackend()
+
+			batch := b.Batch()
+			batch.Set("foo", "a")
+			batch.Delete("foo")
+			require.NoError(t, batch.Exec())
+
+			foo, err := b.Get("foo")
+			assert.Nil(t, foo)
+			assert.NoError(t, err)
+
+			batch = b.Batch()
+			batch.Delete("foo")
+			require.NoError(t, batch.Exec())
+
+			foo, err = b.Get("foo")
+			assert.Nil(t, foo)
+			assert.NoError(t, err)
+
+			assert.NoError(t, b.Set("foo", "a"))
+
+			batch = b.Batch()
+			batch.Delete("foo")
+			require.NoError(t, batch.Exec())
+
+			foo, err = b.Get("foo")
+			assert.Nil(t, foo)
+			assert.NoError(t, err)
+		})
+
 		t.Run("ZAdd", func(t *testing.T) {
 			b := newBackend()
 

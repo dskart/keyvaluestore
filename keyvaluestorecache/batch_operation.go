@@ -55,7 +55,7 @@ func (op *readCacheBatchOperation) Get(key string) keyvaluestore.GetResult {
 	return result
 }
 
-func (op *readCacheBatchOperation) Delete(key string) keyvaluestore.DeleteResult {
+func (op *readCacheBatchOperation) Delete(key string) keyvaluestore.ErrorResult {
 	op.invalidations = append(op.invalidations, key)
 	return op.batch.Delete(key)
 }

@@ -1,9 +1,5 @@
 package keyvaluestore
 
-type DeleteResult interface {
-	Result() (bool, error)
-}
-
 type GetResult interface {
 	Result() (*string, error)
 }
@@ -18,7 +14,7 @@ type ErrorResult interface {
 
 type BatchOperation interface {
 	Get(key string) GetResult
-	Delete(key string) DeleteResult
+	Delete(key string) ErrorResult
 	Set(key string, value interface{}) ErrorResult
 	SMembers(key string) SMembersResult
 	SAdd(key string, member interface{}, members ...interface{}) ErrorResult
@@ -77,19 +73,10 @@ func (op *FallbackBatchOperation) Set(key string, value interface{}) ErrorResult
 	return result
 }
 
-type fboDeleteResult struct {
-	success bool
-	err     error
-}
-
-func (r *fboDeleteResult) Result() (bool, error) {
-	return r.success, r.err
-}
-
-func (op *FallbackBatchOperation) Delete(key string) DeleteResult {
-	result := &fboDeleteResult{}
+func (op *FallbackBatchOperation) Delete(key string) ErrorResult {
+	result := &fboErrorResult{}
 	op.fs = append(op.fs, func() {
-		result.success, result.err = op.Backend.Delete(key)
+		_, result.err = op.Backend.Delete(key)
 		if result.err != nil && op.firstError == nil {
 			op.firstError = result.err
 		}

@@ -101,6 +101,14 @@ func (op *BatchOperation) Set(key string, value interface{}) keyvaluestore.Error
 	})
 }
 
+func (op *BatchOperation) Delete(key string) keyvaluestore.ErrorResult {
+	return op.batchWrite(key, "_", &dynamodb.WriteRequest{
+		DeleteRequest: &dynamodb.DeleteRequest{
+			Key: compositeKey(key, "_"),
+		},
+	})
+}
+
 func (op *BatchOperation) ZAdd(key string, member interface{}, score float64) keyvaluestore.ErrorResult {
 	s := *keyvaluestore.ToString(member)
 	return op.batchWrite(key, s, &dynamodb.WriteRequest{
