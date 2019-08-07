@@ -101,6 +101,26 @@ func (op *BatchOperation) ZRem(key string, member interface{}) keyvaluestore.Err
 	}
 }
 
+type ZScoreResult struct {
+	*redis.FloatCmd
+}
+
+func (r *ZScoreResult) Result() (*float64, error) {
+	v, err := r.FloatCmd.Result()
+	if err == redis.Nil {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (op *BatchOperation) ZScore(key string, member interface{}) keyvaluestore.ZScoreResult {
+	return &ZScoreResult{
+		op.pipe.ZScore(key, *keyvaluestore.ToString(member)),
+	}
+}
+
 func (op *BatchOperation) Exec() error {
 	cmds, _ := op.pipe.Exec()
 	for _, cmd := range cmds {

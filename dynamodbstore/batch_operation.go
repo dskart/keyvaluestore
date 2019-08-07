@@ -11,22 +11,47 @@ import (
 	"github.com/ccbrown/keyvaluestore"
 )
 
-type batchedGet struct {
-	value *string
-	err   error
+type batchedRead struct {
+	key  map[string]*dynamodb.AttributeValue
+	item map[string]*dynamodb.AttributeValue
+	err  error
 }
 
-func (g batchedGet) Result() (*string, error) {
-	return g.value, g.err
+type getResult struct {
+	read *batchedRead
 }
 
-type batchedSMembers struct {
-	members []string
-	err     error
+func (r getResult) Result() (*string, error) {
+	if r.read.item == nil || r.read.err != nil {
+		return nil, r.read.err
+	}
+	return attributeStringValue(r.read.item["v"]), nil
 }
 
-func (g batchedSMembers) Result() ([]string, error) {
-	return g.members, g.err
+type sMembersResult struct {
+	read *batchedRead
+}
+
+func (r sMembersResult) Result() ([]string, error) {
+	if r.read.item == nil || r.read.err != nil {
+		return nil, r.read.err
+	}
+	return attributeStringSliceValue(r.read.item["v"]), nil
+}
+
+type zScoreResult struct {
+	read *batchedRead
+}
+
+func (r zScoreResult) Result() (*float64, error) {
+	if r.read.item == nil || r.read.err != nil {
+		return nil, r.read.err
+	}
+	if rk2 := attributeStringValue(r.read.item["rk2"]); rk2 != nil {
+		score := sortKeyFloat(*rk2)
+		return &score, nil
+	}
+	return nil, nil
 }
 
 type batchedWrite struct {
@@ -42,33 +67,48 @@ type BatchOperation struct {
 	*keyvaluestore.FallbackBatchOperation
 	Backend *Backend
 
-	gets      map[string]*batchedGet
-	smemberss map[string]*batchedSMembers
-	writes    map[string]*batchedWrite
+	reads  map[string]*batchedRead
+	writes map[string]*batchedWrite
+}
+
+func combineKeys(hashKey, rangeKey string) string {
+	var encodedHashKeyLength [8]byte
+	binary.BigEndian.PutUint64(encodedHashKeyLength[:], uint64(len(hashKey)))
+	return string(encodedHashKeyLength[:]) + hashKey + rangeKey
+}
+
+func (op *BatchOperation) batchRead(hashKey, rangeKey string) *batchedRead {
+	if op.reads == nil {
+		op.reads = make(map[string]*batchedRead)
+	}
+
+	mapKey := combineKeys(hashKey, rangeKey)
+	if read, ok := op.reads[mapKey]; ok {
+		return read
+	}
+	read := &batchedRead{
+		key: compositeKey(hashKey, rangeKey),
+	}
+	op.reads[mapKey] = read
+	return read
 }
 
 func (op *BatchOperation) Get(key string) keyvaluestore.GetResult {
-	if op.gets == nil {
-		op.gets = make(map[string]*batchedGet)
+	return getResult{
+		read: op.batchRead(key, "_"),
 	}
-	if get, ok := op.gets[key]; ok {
-		return get
-	}
-	get := &batchedGet{}
-	op.gets[key] = get
-	return get
 }
 
 func (op *BatchOperation) SMembers(key string) keyvaluestore.SMembersResult {
-	if op.smemberss == nil {
-		op.smemberss = make(map[string]*batchedSMembers)
+	return sMembersResult{
+		read: op.batchRead(key, "_"),
 	}
-	if smembers, ok := op.smemberss[key]; ok {
-		return smembers
+}
+
+func (op *BatchOperation) ZScore(key string, member interface{}) keyvaluestore.ZScoreResult {
+	return zScoreResult{
+		read: op.batchRead(key, *keyvaluestore.ToString(member)),
 	}
-	smembers := &batchedSMembers{}
-	op.smemberss[key] = smembers
-	return smembers
 }
 
 func (op *BatchOperation) batchWrite(hashKey, rangeKey string, request *dynamodb.WriteRequest) keyvaluestore.ErrorResult {
@@ -76,10 +116,7 @@ func (op *BatchOperation) batchWrite(hashKey, rangeKey string, request *dynamodb
 		op.writes = make(map[string]*batchedWrite)
 	}
 
-	var encodedHashKeyLength [8]byte
-	binary.BigEndian.PutUint64(encodedHashKeyLength[:], uint64(len(hashKey)))
-	mapKey := string(encodedHashKeyLength[:]) + hashKey + rangeKey
-
+	mapKey := combineKeys(hashKey, rangeKey)
 	if write, ok := op.writes[mapKey]; ok {
 		write.request = request
 		return write
@@ -122,14 +159,10 @@ func (op *BatchOperation) ZAdd(key string, member interface{}, score float64) ke
 }
 
 func (op *BatchOperation) execReads() error {
-	keys := make([]map[string]*dynamodb.AttributeValue, len(op.gets)+len(op.smemberss))
+	keys := make([]map[string]*dynamodb.AttributeValue, len(op.reads))
 	i := 0
-	for key := range op.gets {
-		keys[i] = compositeKey(key, "_")
-		i++
-	}
-	for key := range op.smemberss {
-		keys[i] = compositeKey(key, "_")
+	for _, read := range op.reads {
+		keys[i] = read.key
 		i++
 	}
 
@@ -163,24 +196,18 @@ func (op *BatchOperation) execReads() error {
 				})
 				if err != nil {
 					for _, key := range batch {
-						key := *attributeStringValue(key["hk"])
-						if get, ok := op.gets[key]; ok {
-							get.err = err
-						}
-						if smembers, ok := op.smemberss[key]; ok {
-							smembers.err = err
+						mapKey := combineKeys(*attributeStringValue(key["hk"]), *attributeStringValue(key["rk"]))
+						if read, ok := op.reads[mapKey]; ok {
+							read.err = err
 						}
 					}
 					return errors.Wrap(err, "dynamodb batch get item request error")
 				}
 
 				for _, item := range result.Responses[op.Backend.TableName] {
-					key := *attributeStringValue(item["hk"])
-					if get, ok := op.gets[key]; ok {
-						get.value = attributeStringValue(item["v"])
-					}
-					if smembers, ok := op.smemberss[key]; ok {
-						smembers.members = attributeStringSliceValue(item["v"])
+					mapKey := combineKeys(*attributeStringValue(item["hk"]), *attributeStringValue(item["rk"]))
+					if read, ok := op.reads[mapKey]; ok {
+						read.item = item
 					}
 				}
 
