@@ -6,6 +6,8 @@ require (
 	github.com/go-redis/redis v6.15.3+incompatible
 	github.com/pkg/errors v0.8.1
 	github.com/stretchr/testify v1.3.0
-	github.com/theaaf/aws-dax-go v0.0.0-20190402210323-b3f0ccf6bdf7
+	github.com/theaaf/aws-dax-go v0.0.0-20190620175550-b3f0ccf6bdf7
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
 )
+
+go 1.13
