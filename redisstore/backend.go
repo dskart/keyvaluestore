@@ -13,14 +13,9 @@ type Backend struct {
 	Client *redis.Client
 }
 
-func (b *Backend) WithProfiler(profiler interface{}) *Backend {
-	redisProfiler, ok := profiler.(Profiler)
-	if !ok {
-		return b
-	}
-
+func (b *Backend) WithProfiler(profiler Profiler) *Backend {
 	return &Backend{
-		Client: ProfileClient(b.Client, redisProfiler),
+		Client: ProfileClient(b.Client, profiler),
 	}
 }
 
