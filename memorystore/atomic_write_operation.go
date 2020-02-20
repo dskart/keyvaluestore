@@ -67,6 +67,17 @@ func (op *AtomicWriteOperation) Delete(key string) keyvaluestore.AtomicWriteResu
 	})
 }
 
+func (op *AtomicWriteOperation) DeleteXX(key string) keyvaluestore.AtomicWriteResult {
+	return op.write(&atomicWriteOperation{
+		condition: func() bool {
+			return op.Backend.get(key) != nil
+		},
+		write: func() {
+			op.Backend.delete(key)
+		},
+	})
+}
+
 func (op *AtomicWriteOperation) IncrBy(key string, n int64) keyvaluestore.AtomicWriteResult {
 	return op.write(&atomicWriteOperation{
 		write: func() {

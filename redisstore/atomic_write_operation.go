@@ -68,6 +68,14 @@ func (op *AtomicWriteOperation) Delete(key string) keyvaluestore.AtomicWriteResu
 	})
 }
 
+func (op *AtomicWriteOperation) DeleteXX(key string) keyvaluestore.AtomicWriteResult {
+	return op.write(&atomicWriteOperation{
+		key:       key,
+		condition: "redis.call('exists', $@) == 1",
+		write:     "redis.call('del', $@)",
+	})
+}
+
 func (op *AtomicWriteOperation) IncrBy(key string, n int64) keyvaluestore.AtomicWriteResult {
 	return op.write(&atomicWriteOperation{
 		key:       key,

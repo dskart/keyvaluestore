@@ -82,6 +82,16 @@ func (op *AtomicWriteOperation) Delete(key string) keyvaluestore.AtomicWriteResu
 	})
 }
 
+func (op *AtomicWriteOperation) DeleteXX(key string) keyvaluestore.AtomicWriteResult {
+	return op.write(dynamodb.TransactWriteItem{
+		Delete: &dynamodb.Delete{
+			ConditionExpression: aws.String("attribute_exists(v)"),
+			Key:                 compositeKey(key, "_"),
+			TableName:           &op.Backend.TableName,
+		},
+	})
+}
+
 func (op *AtomicWriteOperation) IncrBy(key string, n int64) keyvaluestore.AtomicWriteResult {
 	return op.write(dynamodb.TransactWriteItem{
 		Update: &dynamodb.Update{
