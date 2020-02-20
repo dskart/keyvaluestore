@@ -23,6 +23,9 @@ type AtomicWriteOperation interface {
 	// Deletes a key. No conditionals are applied.
 	Delete(key string) AtomicWriteResult
 
+	// Deletes a key. The atomic write operation will be aborted if the key does not exist.
+	DeleteXX(key string) AtomicWriteResult
+
 	// Increments the given key by some number. If the key doesn't exist, it's set to the given
 	// number instead. No conditionals are applied.
 	IncrBy(key string, n int64) AtomicWriteResult

@@ -102,6 +102,35 @@ func TestBackendAtomicWrite(t *testing.T, newBackend func() keyvaluestore.Backen
 		assert.Nil(t, got)
 	})
 
+	t.Run("DeleteXX", func(t *testing.T) {
+		assert.NoError(t, b.Set("foo", "bar"))
+		assert.NoError(t, b.Set("deleteme", "bar"))
+		_, err := b.Delete("notset")
+		assert.NoError(t, err)
+
+		tx := b.AtomicWrite()
+		defer assertConditionFail(t, tx.DeleteXX("notset"))
+		tx.Delete("deleteme")
+		ok, err := tx.Exec()
+		assert.NoError(t, err)
+		assert.False(t, ok)
+
+		got, err := b.Get("deleteme")
+		assert.NoError(t, err)
+		assert.NotNil(t, got)
+
+		tx = b.AtomicWrite()
+		defer assertConditionPass(t, tx.DeleteXX("foo"))
+		tx.Delete("deleteme")
+		ok, err = tx.Exec()
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		got, err = b.Get("deleteme")
+		assert.NoError(t, err)
+		assert.Nil(t, got)
+	})
+
 	t.Run("IncrBy", func(t *testing.T) {
 		assert.NoError(t, b.Set("foo", "bar"))
 		_, err := b.Delete("notset")

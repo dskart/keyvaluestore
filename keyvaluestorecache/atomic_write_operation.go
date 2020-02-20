@@ -29,6 +29,11 @@ func (op *readCacheAtomicWriteOperation) Delete(key string) keyvaluestore.Atomic
 	return op.atomicWrite.Delete(key)
 }
 
+func (op *readCacheAtomicWriteOperation) DeleteXX(key string) keyvaluestore.AtomicWriteResult {
+	op.invalidations = append(op.invalidations, key)
+	return op.atomicWrite.DeleteXX(key)
+}
+
 func (op *readCacheAtomicWriteOperation) IncrBy(key string, n int64) keyvaluestore.AtomicWriteResult {
 	op.invalidations = append(op.invalidations, key)
 	return op.atomicWrite.IncrBy(key, n)
