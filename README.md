@@ -186,9 +186,7 @@ Then you can connect to it like so:
 session := session.Must(session.NewSession())
 backend := &KeyValueStore{
     backend: &dynamodbstore.Backend{
-        Client: &dynamodbstore.AWSBackendClient{
-            DynamoDBAPI: dynamodb.New(session),
-        },
+        Client: dynamodb.New(session),
         TableName: cfg.TableName,
     },
 }
