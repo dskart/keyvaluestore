@@ -1,6 +1,7 @@
 package redisstore
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -133,6 +134,22 @@ func (b *Backend) ZAdd(key string, member interface{}, score float64) error {
 	}).Err()
 }
 
+func zhHashKey(key string) string {
+	return "__kvs_zh:" + key
+}
+
+func (b *Backend) ZHAdd(key, field string, member interface{}, score float64) error {
+	_, err := b.Client.TxPipelined(func(pipe redis.Pipeliner) error {
+		pipe.ZAdd(key, redis.Z{
+			Member: field,
+			Score:  score,
+		}).Err()
+		pipe.HSet(zhHashKey(key), field, member).Err()
+		return nil
+	})
+	return err
+}
+
 func (b *Backend) ZScore(key string, member interface{}) (*float64, error) {
 	if score, err := b.Client.ZScore(key, *keyvaluestore.ToString(member)).Result(); err == nil {
 		return &score, nil
@@ -146,8 +163,22 @@ func (b *Backend) ZRem(key string, member interface{}) error {
 	return b.Client.ZRem(key, member).Err()
 }
 
+func (b *Backend) ZHRem(key, field string) error {
+	_, err := b.Client.TxPipelined(func(pipe redis.Pipeliner) error {
+		pipe.ZRem(key, field).Err()
+		pipe.HDel(zhHashKey(key), field).Err()
+		return nil
+	})
+	return err
+}
+
 func (b *Backend) ZRangeByScore(key string, min, max float64, limit int) ([]string, error) {
 	members, err := b.ZRangeByScoreWithScores(key, min, max, limit)
+	return members.Values(), err
+}
+
+func (b *Backend) ZHRangeByScore(key string, min, max float64, limit int) ([]string, error) {
+	members, err := b.ZHRangeByScoreWithScores(key, min, max, limit)
 	return members.Values(), err
 }
 
@@ -174,8 +205,56 @@ func (b *Backend) ZRangeByScoreWithScores(key string, min, max float64, limit in
 	return members, nil
 }
 
+func (b *Backend) ZHRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	return b.zhRangeByScoreWithScores("zrangebyscore", key, min, max, limit)
+}
+
+func (b *Backend) zhRangeByScoreWithScores(cmd, key string, start, end float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	args := []interface{}{start, end, "WITHSCORES"}
+	if limit != 0 {
+		args = append(args, "LIMIT", 0, limit)
+	}
+	result, err := b.Client.Eval(`
+		local m = redis.call('`+cmd+`', KEYS[1], unpack(ARGV))
+		if #m == 0 then return {} end
+		local f = {}
+		local ret = {}
+		for i=1,#m/2 do f[i]=m[i*2-1]; ret[i*2]=m[i*2] end
+		local v = redis.call('hmget', KEYS[2], unpack(f))
+		for i=1,#m/2 do ret[i*2-1]=v[i] end
+		return ret
+	`,
+		[]string{key, zhHashKey(key)},
+		args...,
+	).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	results := result.([]interface{})
+	members := make([]*keyvaluestore.ScoredMember, len(results)/2)
+
+	for i := range members {
+		score, err := strconv.ParseFloat(results[i*2+1].(string), 64)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing score: %w", err)
+		}
+		members[i] = &keyvaluestore.ScoredMember{
+			Score: score,
+			Value: results[i*2].(string),
+		}
+	}
+
+	return members, nil
+}
+
 func (b *Backend) ZRevRangeByScore(key string, min, max float64, limit int) ([]string, error) {
 	members, err := b.ZRevRangeByScoreWithScores(key, min, max, limit)
+	return members.Values(), err
+}
+
+func (b *Backend) ZHRevRangeByScore(key string, min, max float64, limit int) ([]string, error) {
+	members, err := b.ZHRevRangeByScoreWithScores(key, min, max, limit)
 	return members.Values(), err
 }
 
@@ -202,6 +281,10 @@ func (b *Backend) ZRevRangeByScoreWithScores(key string, min, max float64, limit
 	return members, nil
 }
 
+func (b *Backend) ZHRevRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	return b.zhRangeByScoreWithScores("zrevrangebyscore", key, max, min, limit)
+}
+
 func (b *Backend) ZCount(key string, min, max float64) (int, error) {
 	n, err := b.Client.ZCount(key,
 		strings.ToLower(strconv.FormatFloat(min, 'g', -1, 64)),
@@ -223,10 +306,42 @@ func (b *Backend) ZRangeByLex(key string, min, max string, limit int) ([]string,
 	}).Result()
 }
 
+func (b *Backend) ZHRangeByLex(key string, min, max string, limit int) ([]string, error) {
+	return b.zhRangeByLex("zrangebylex", key, min, max, limit)
+}
+
+func (b *Backend) zhRangeByLex(cmd, key string, start, end string, limit int) ([]string, error) {
+	args := []interface{}{start, end}
+	if limit != 0 {
+		args = append(args, "LIMIT", 0, limit)
+	}
+	result, err := b.Client.Eval(`
+		local f = redis.call('`+cmd+`', KEYS[1], unpack(ARGV))
+		if #f == 0 then return {} end
+		return redis.call('hmget', KEYS[2], unpack(f))
+	`,
+		[]string{key, zhHashKey(key)},
+		args...,
+	).Result()
+	if err != nil {
+		return nil, err
+	}
+	values := result.([]interface{})
+	ret := make([]string, len(values))
+	for i, v := range values {
+		ret[i] = v.(string)
+	}
+	return ret, nil
+}
+
 func (b *Backend) ZRevRangeByLex(key string, min, max string, limit int) ([]string, error) {
 	return b.Client.ZRevRangeByLex(key, redis.ZRangeBy{
 		Min:   min,
 		Max:   max,
 		Count: int64(limit),
 	}).Result()
+}
+
+func (b *Backend) ZHRevRangeByLex(key string, min, max string, limit int) ([]string, error) {
+	return b.zhRangeByLex("zrevrangebylex", key, max, min, limit)
 }

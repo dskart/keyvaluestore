@@ -448,11 +448,16 @@ func floatSortKeyAfter(f float64) string {
 
 func (b *Backend) ZAdd(key string, member interface{}, score float64) error {
 	s := *keyvaluestore.ToString(member)
+	return b.ZHAdd(key, s, s, score)
+}
+
+func (b *Backend) ZHAdd(key, field string, member interface{}, score float64) error {
+	s := *keyvaluestore.ToString(member)
 	if _, err := b.Client.PutItem(&dynamodb.PutItemInput{
 		TableName: aws.String(b.TableName),
-		Item: newItem(key, s, map[string]*dynamodb.AttributeValue{
+		Item: newItem(key, field, map[string]*dynamodb.AttributeValue{
 			"v":   attributeValue(s),
-			"rk2": attributeValue(floatSortKey(score) + s),
+			"rk2": attributeValue(floatSortKey(score) + field),
 		}),
 	}); err != nil {
 		return errors.Wrap(err, "dynamodb put item request error")
@@ -517,9 +522,13 @@ func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error)
 
 func (b *Backend) ZRem(key string, member interface{}) error {
 	s := *keyvaluestore.ToString(member)
+	return b.ZHRem(key, s)
+}
+
+func (b *Backend) ZHRem(key, field string) error {
 	if _, err := b.Client.DeleteItem(&dynamodb.DeleteItemInput{
 		TableName: aws.String(b.TableName),
-		Key:       compositeKey(key, s),
+		Key:       compositeKey(key, field),
 	}); err != nil {
 		return errors.Wrap(err, "dynamodb delete item request error")
 	}
@@ -606,8 +615,16 @@ func (b *Backend) ZRangeByScore(key string, min, max float64, limit int) ([]stri
 	return members.Values(), err
 }
 
+func (b *Backend) ZHRangeByScore(key string, min, max float64, limit int) ([]string, error) {
+	return b.ZRangeByScore(key, min, max, limit)
+}
+
 func (b *Backend) ZRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
 	return b.zRangeByScoreWithScores(key, min, max, limit)
+}
+
+func (b *Backend) ZHRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	return b.ZRangeByScoreWithScores(key, min, max, limit)
 }
 
 func (b *Backend) zRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
@@ -620,8 +637,16 @@ func (b *Backend) ZRevRangeByScore(key string, min, max float64, limit int) ([]s
 	return members.Values(), err
 }
 
+func (b *Backend) ZHRevRangeByScore(key string, min, max float64, limit int) ([]string, error) {
+	return b.ZRevRangeByScore(key, min, max, limit)
+}
+
 func (b *Backend) ZRevRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
 	return b.zRevRangeByScoreWithScores(key, min, max, limit)
+}
+
+func (b *Backend) ZHRevRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	return b.ZRevRangeByScoreWithScores(key, min, max, limit)
 }
 
 func (b *Backend) zRevRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
@@ -634,7 +659,17 @@ func (b *Backend) ZRangeByLex(key string, min, max string, limit int) ([]string,
 	return members.Values(), err
 }
 
+func (b *Backend) ZHRangeByLex(key string, min, max string, limit int) ([]string, error) {
+	members, err := b.zRangeByLex(key, min, max, limit, false, false)
+	return members.Values(), err
+}
+
 func (b *Backend) ZRevRangeByLex(key string, min, max string, limit int) ([]string, error) {
+	members, err := b.zRangeByLex(key, min, max, limit, true, false)
+	return members.Values(), err
+}
+
+func (b *Backend) ZHRevRangeByLex(key string, min, max string, limit int) ([]string, error) {
 	members, err := b.zRangeByLex(key, min, max, limit, true, false)
 	return members.Values(), err
 }

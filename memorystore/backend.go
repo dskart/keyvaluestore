@@ -304,8 +304,7 @@ type sortedSet struct {
 	m              *immutable.OrderedMap
 }
 
-func (b *Backend) zadd(key string, member interface{}, f func(previousScore *float64) (float64, error)) (float64, error) {
-	v := *keyvaluestore.ToString(member)
+func (b *Backend) zhadd(key, field string, member interface{}, f func(previousScore *float64) (float64, error)) (float64, error) {
 	s, _ := b.m[key].(*sortedSet)
 	if s == nil {
 		s = &sortedSet{
@@ -315,8 +314,8 @@ func (b *Backend) zadd(key string, member interface{}, f func(previousScore *flo
 
 	var previousScore *float64
 
-	if prev, ok := s.scoresByMember[v]; ok {
-		s.m = s.m.Delete(floatSortKey(prev) + v)
+	if prev, ok := s.scoresByMember[field]; ok {
+		s.m = s.m.Delete(floatSortKey(prev) + field)
 		previousScore = &prev
 	}
 
@@ -325,8 +324,9 @@ func (b *Backend) zadd(key string, member interface{}, f func(previousScore *flo
 	if err != nil {
 		return 0, err
 	} else {
-		s.m = s.m.Set(floatSortKey(newScore)+v, v)
-		s.scoresByMember[v] = newScore
+		v := *keyvaluestore.ToString(member)
+		s.m = s.m.Set(floatSortKey(newScore)+field, v)
+		s.scoresByMember[field] = newScore
 	}
 
 	b.m[key] = s
@@ -334,10 +334,15 @@ func (b *Backend) zadd(key string, member interface{}, f func(previousScore *flo
 }
 
 func (b *Backend) ZAdd(key string, member interface{}, score float64) error {
+	s := *keyvaluestore.ToString(member)
+	return b.ZHAdd(key, s, s, score)
+}
+
+func (b *Backend) ZHAdd(key, field string, member interface{}, score float64) error {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
-	_, err := b.zadd(key, member, func(previousScore *float64) (float64, error) {
+	_, err := b.zhadd(key, field, member, func(previousScore *float64) (float64, error) {
 		return score, nil
 	})
 	return err
@@ -361,7 +366,8 @@ func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error)
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
-	return b.zadd(key, member, func(previousScore *float64) (float64, error) {
+	s := *keyvaluestore.ToString(member)
+	return b.zhadd(key, s, s, func(previousScore *float64) (float64, error) {
 		if previousScore != nil {
 			return *previousScore + n, nil
 		}
@@ -382,18 +388,22 @@ func (b *Backend) zscore(key string, member interface{}) *float64 {
 }
 
 func (b *Backend) ZRem(key string, member interface{}) error {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-	return b.zrem(key, member)
+	s := *keyvaluestore.ToString(member)
+	return b.ZHRem(key, s)
 }
 
-func (b *Backend) zrem(key string, member interface{}) error {
+func (b *Backend) ZHRem(key, field string) error {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	return b.zhrem(key, field)
+}
+
+func (b *Backend) zhrem(key, field string) error {
 	s, _ := b.m[key].(*sortedSet)
 	if s != nil {
-		v := *keyvaluestore.ToString(member)
-		if previous, ok := s.scoresByMember[v]; ok {
-			s.m = s.m.Delete(floatSortKey(previous) + v)
-			delete(s.scoresByMember, v)
+		if previous, ok := s.scoresByMember[field]; ok {
+			s.m = s.m.Delete(floatSortKey(previous) + field)
+			delete(s.scoresByMember, field)
 			b.m[key] = s
 		}
 	}
@@ -411,11 +421,19 @@ func (b *Backend) ZRangeByScore(key string, min, max float64, limit int) ([]stri
 	}
 }
 
+func (b *Backend) ZHRangeByScore(key string, min, max float64, limit int) ([]string, error) {
+	return b.ZRangeByScore(key, min, max, limit)
+}
+
 func (b *Backend) ZRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
 	return b.zRangeByScoreWithScores(key, min, max, limit)
+}
+
+func (b *Backend) ZHRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	return b.ZRangeByScoreWithScores(key, min, max, limit)
 }
 
 func (b *Backend) zRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
@@ -458,11 +476,19 @@ func (b *Backend) ZRevRangeByScore(key string, min, max float64, limit int) ([]s
 	}
 }
 
+func (b *Backend) ZHRevRangeByScore(key string, min, max float64, limit int) ([]string, error) {
+	return b.ZRevRangeByScore(key, min, max, limit)
+}
+
 func (b *Backend) ZRevRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
 	return b.zRevRangeByScoreWithScores(key, min, max, limit)
+}
+
+func (b *Backend) ZHRevRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	return b.ZRevRangeByScoreWithScores(key, min, max, limit)
 }
 
 func (b *Backend) zRevRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
@@ -524,25 +550,29 @@ func (b *Backend) ZRangeByLex(key string, min, max string, limit int) ([]string,
 		next = s.m.MinAfter(sortKeyPrefix + min[1:])
 		if min[0] == '[' {
 			if next == nil {
-				if x := s.m.Max(); x != nil && x.Value().(string) == min[1:] {
+				if x := s.m.Max(); x != nil && x.Key().(string)[len(sortKeyPrefix):] == min[1:] {
 					next = x
 				}
-			} else if x := next.Prev(); x != nil && x.Value().(string) == min[1:] {
+			} else if x := next.Prev(); x != nil && x.Key().(string)[len(sortKeyPrefix):] == min[1:] {
 				next = x
 			}
 		}
 	}
 
 	for (limit == 0 || len(results) < limit) && next != nil {
-		v := next.Value().(string)
-		if max != "+" && (v > max[1:] || (max[0] == '(' && v == max[1:])) {
+		lex := next.Key().(string)[len(sortKeyPrefix):]
+		if max != "+" && (lex > max[1:] || (max[0] == '(' && lex == max[1:])) {
 			break
 		}
-		results = append(results, v)
+		results = append(results, next.Value().(string))
 		next = next.Next()
 	}
 
 	return results, nil
+}
+
+func (b *Backend) ZHRangeByLex(key string, min, max string, limit int) ([]string, error) {
+	return b.ZRangeByLex(key, min, max, limit)
 }
 
 func (b *Backend) ZRevRangeByLex(key string, min, max string, limit int) ([]string, error) {
@@ -565,23 +595,27 @@ func (b *Backend) ZRevRangeByLex(key string, min, max string, limit int) ([]stri
 		next = s.m.MaxBefore(sortKeyPrefix + max[1:])
 		if max[0] == '[' {
 			if next == nil {
-				if x := s.m.Min(); x != nil && x.Value().(string) == min[1:] {
+				if x := s.m.Min(); x != nil && x.Key().(string)[len(sortKeyPrefix):] == min[1:] {
 					next = x
 				}
-			} else if x := next.Next(); x != nil && x.Value().(string) == max[1:] {
+			} else if x := next.Next(); x != nil && x.Key().(string)[len(sortKeyPrefix):] == max[1:] {
 				next = x
 			}
 		}
 	}
 
 	for (limit == 0 || len(results) < limit) && next != nil {
-		v := next.Value().(string)
-		if min != "-" && (v < min[1:] || (min[0] == '(' && v == min[1:])) {
+		lex := next.Key().(string)[len(sortKeyPrefix):]
+		if min != "-" && (lex < min[1:] || (min[0] == '(' && lex == min[1:])) {
 			break
 		}
-		results = append(results, v)
+		results = append(results, next.Value().(string))
 		next = next.Prev()
 	}
 
 	return results, nil
+}
+
+func (b *Backend) ZHRevRangeByLex(key string, min, max string, limit int) ([]string, error) {
+	return b.ZRevRangeByLex(key, min, max, limit)
 }

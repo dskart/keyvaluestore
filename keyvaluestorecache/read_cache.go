@@ -225,6 +225,12 @@ func (c *ReadCache) ZAdd(key string, member interface{}, score float64) error {
 	return err
 }
 
+func (c *ReadCache) ZHAdd(key, field string, member interface{}, score float64) error {
+	err := c.backend.ZHAdd(key, field, member, score)
+	c.Invalidate(key)
+	return err
+}
+
 type readCacheZScoreEntry struct {
 	score *float64
 	err   error
@@ -260,6 +266,12 @@ func (c *ReadCache) ZIncrBy(key string, member string, n float64) (float64, erro
 
 func (c *ReadCache) ZRem(key string, member interface{}) error {
 	err := c.backend.ZRem(key, member)
+	c.Invalidate(key)
+	return err
+}
+
+func (c *ReadCache) ZHRem(key, field string) error {
+	err := c.backend.ZHRem(key, field)
 	c.Invalidate(key)
 	return err
 }
@@ -333,8 +345,21 @@ func (c *ReadCache) ZRangeByScore(key string, min, max float64, limit int) ([]st
 	return members.Values(), err
 }
 
+func (c *ReadCache) ZHRangeByScore(key string, min, max float64, limit int) ([]string, error) {
+	members, err := c.ZHRangeByScoreWithScores(key, min, max, limit)
+	return members.Values(), err
+}
+
 func (c *ReadCache) ZRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
-	subkey := concatKeys("zrbs", floatKey(min), floatKey(max))
+	return c.zRangeByScoreWithScores("zrbs", c.backend.ZRangeByScoreWithScores, key, min, max, limit)
+}
+
+func (c *ReadCache) ZHRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	return c.zRangeByScoreWithScores("zrbs", c.backend.ZHRangeByScoreWithScores, key, min, max, limit)
+}
+
+func (c *ReadCache) zRangeByScoreWithScores(cacheKey string, f func(string, float64, float64, int) (keyvaluestore.ScoredMembers, error), key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	subkey := concatKeys(cacheKey, floatKey(min), floatKey(max))
 	v, _ := c.load(key)
 	zEntry, ok := v.(readCacheZEntry)
 	if ok {
@@ -342,7 +367,7 @@ func (c *ReadCache) ZRangeByScoreWithScores(key string, min, max float64, limit 
 			return entry.members, entry.err
 		}
 	}
-	members, err := c.backend.ZRangeByScoreWithScores(key, min, max, limit)
+	members, err := f(key, min, max, limit)
 	if zEntry.subcache == nil {
 		zEntry.subcache = make(map[string]interface{})
 	}
@@ -360,30 +385,29 @@ func (c *ReadCache) ZRevRangeByScore(key string, min, max float64, limit int) ([
 	return members.Values(), err
 }
 
+func (c *ReadCache) ZHRevRangeByScore(key string, min, max float64, limit int) ([]string, error) {
+	members, err := c.ZHRevRangeByScoreWithScores(key, min, max, limit)
+	return members.Values(), err
+}
+
 func (c *ReadCache) ZRevRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
-	subkey := concatKeys("zrrbs", floatKey(min), floatKey(max))
-	v, _ := c.load(key)
-	zEntry, ok := v.(readCacheZEntry)
-	if ok {
-		if entry, ok := zEntry.subcache[subkey].(readCacheZRangeEntry); ok && limit <= entry.limit {
-			return entry.members, entry.err
-		}
-	}
-	members, err := c.backend.ZRevRangeByScoreWithScores(key, min, max, limit)
-	if zEntry.subcache == nil {
-		zEntry.subcache = make(map[string]interface{})
-	}
-	zEntry.subcache[subkey] = readCacheZRangeEntry{
-		members: members,
-		limit:   limit,
-		err:     err,
-	}
-	c.store(key, zEntry)
-	return members, err
+	return c.zRangeByScoreWithScores("zrrbs", c.backend.ZRevRangeByScoreWithScores, key, min, max, limit)
+}
+
+func (c *ReadCache) ZHRevRangeByScoreWithScores(key string, min, max float64, limit int) (keyvaluestore.ScoredMembers, error) {
+	return c.zRangeByScoreWithScores("zrrbs", c.backend.ZHRevRangeByScoreWithScores, key, min, max, limit)
 }
 
 func (c *ReadCache) ZRangeByLex(key string, min, max string, limit int) ([]string, error) {
-	subkey := concatKeys("zrbl", min, max)
+	return c.zRangeByLex("zrbl", c.backend.ZRangeByLex, key, min, max, limit)
+}
+
+func (c *ReadCache) ZHRangeByLex(key string, min, max string, limit int) ([]string, error) {
+	return c.zRangeByLex("zrbl", c.backend.ZHRangeByLex, key, min, max, limit)
+}
+
+func (c *ReadCache) zRangeByLex(cacheKey string, f func(string, string, string, int) ([]string, error), key string, min, max string, limit int) ([]string, error) {
+	subkey := concatKeys(cacheKey, min, max)
 	v, _ := c.load(key)
 	zEntry, ok := v.(readCacheZEntry)
 	if ok {
@@ -391,7 +415,7 @@ func (c *ReadCache) ZRangeByLex(key string, min, max string, limit int) ([]strin
 			return entry.members.Values(), entry.err
 		}
 	}
-	members, err := c.backend.ZRangeByLex(key, min, max, limit)
+	members, err := f(key, min, max, limit)
 	if zEntry.subcache == nil {
 		zEntry.subcache = make(map[string]interface{})
 	}
@@ -412,32 +436,11 @@ func (c *ReadCache) ZRangeByLex(key string, min, max string, limit int) ([]strin
 }
 
 func (c *ReadCache) ZRevRangeByLex(key string, min, max string, limit int) ([]string, error) {
-	subkey := concatKeys("zrrbl", min, max)
-	v, _ := c.load(key)
-	zEntry, ok := v.(readCacheZEntry)
-	if ok {
-		if entry, ok := zEntry.subcache[subkey].(readCacheZRangeEntry); ok && limit <= entry.limit {
-			return entry.members.Values(), entry.err
-		}
-	}
-	members, err := c.backend.ZRevRangeByLex(key, min, max, limit)
-	if zEntry.subcache == nil {
-		zEntry.subcache = make(map[string]interface{})
-	}
+	return c.zRangeByLex("zrrbl", c.backend.ZRevRangeByLex, key, min, max, limit)
+}
 
-	scoredMembers := make([]*keyvaluestore.ScoredMember, len(members))
-
-	for i, member := range members {
-		scoredMembers[i] = &keyvaluestore.ScoredMember{Value: member}
-	}
-
-	zEntry.subcache[subkey] = readCacheZRangeEntry{
-		members: scoredMembers,
-		limit:   limit,
-		err:     err,
-	}
-	c.store(key, zEntry)
-	return members, err
+func (c *ReadCache) ZHRevRangeByLex(key string, min, max string, limit int) ([]string, error) {
+	return c.zRangeByLex("zrrbl", c.backend.ZHRevRangeByLex, key, min, max, limit)
 }
 
 func (c *ReadCache) Invalidate(key string) {
