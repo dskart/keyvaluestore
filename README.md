@@ -69,7 +69,7 @@ func (s *Store) AddUser(user *model.User) error {
 
     tx := s.backend.AtomicWrite()
     tx.Set("user:" + string(user.Id), serialized)
-    tx.ZAdd("usernames", user.Username, 0.0)
+    tx.ZHAdd("usernames", user.Username, user.Id, 0.0)
     usernameSet := tx.SetNX("user_by_username:"+user.Username, user.Id)
     tx.SetNX("user_by_email_address:"+user.EmailAddress, user.Id)
 
