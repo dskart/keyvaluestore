@@ -78,31 +78,16 @@ func valueToString(v *client.Value) *string {
 	return nil
 }
 
-func scalarToString(v *client.Scalar) *string {
+func arrayValueToStrings(v *client.Value) []string {
 	if v == nil {
 		return nil
 	}
 	switch v := v.Value.(type) {
-	case *client.Scalar_Bytes:
-		s := string(v.Bytes)
-		return &s
-	case *client.Scalar_Int:
-		s := strconv.FormatInt(v.Int, 10)
-		return &s
-	}
-	return nil
-}
-
-func setValueToStrings(v *client.Value) []string {
-	if v == nil {
-		return nil
-	}
-	switch v := v.Value.(type) {
-	case *client.Value_Set:
-		if v.Set != nil {
-			ret := make([]string, len(v.Set.Scalars))
-			for i, v := range v.Set.Scalars {
-				ret[i] = *scalarToString(v)
+	case *client.Value_Array:
+		if v.Array != nil {
+			ret := make([]string, len(v.Array.Values))
+			for i, v := range v.Array.Values {
+				ret[i] = *valueToString(v)
 			}
 			return ret
 		}
@@ -227,14 +212,14 @@ func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error)
 }
 
 func (b *Backend) SAdd(key string, member interface{}, members ...interface{}) error {
-	scalars := make([]*client.Scalar, 1+len(members))
-	scalars[0] = toScalar(member)
+	values := make([]*client.Value, 1+len(members))
+	values[0] = toValue(member)
 	for i, m := range members {
-		scalars[i+1] = toScalar(m)
+		values[i+1] = toValue(m)
 	}
 	if resp, err := b.Client.SetAdd(context.Background(), &client.SetAddRequest{
 		Key:     toHash(key),
-		Members: scalars,
+		Members: values,
 	}); err != nil {
 		return err
 	} else if err := resp.GetError(); err != nil {
@@ -245,14 +230,14 @@ func (b *Backend) SAdd(key string, member interface{}, members ...interface{}) e
 }
 
 func (b *Backend) SRem(key string, member interface{}, members ...interface{}) error {
-	scalars := make([]*client.Scalar, 1+len(members))
-	scalars[0] = toScalar(member)
+	values := make([]*client.Value, 1+len(members))
+	values[0] = toValue(member)
 	for i, m := range members {
-		scalars[i+1] = toScalar(m)
+		values[i+1] = toValue(m)
 	}
 	if resp, err := b.Client.SetRemove(context.Background(), &client.SetRemoveRequest{
 		Key:     toHash(key),
-		Members: scalars,
+		Members: values,
 	}); err != nil {
 		return err
 	} else if err := resp.GetError(); err != nil {
@@ -270,7 +255,7 @@ func (b *Backend) SMembers(key string) ([]string, error) {
 	} else if err := resp.GetError(); err != nil {
 		return nil, newError(err)
 	} else {
-		return setValueToStrings(resp.GetResult().Value), nil
+		return arrayValueToStrings(resp.GetResult().Value), nil
 	}
 }
 
