@@ -217,9 +217,14 @@ func (b *Backend) SAdd(key string, member interface{}, members ...interface{}) e
 	for i, m := range members {
 		values[i+1] = toValue(m)
 	}
-	if resp, err := b.Client.SetAdd(context.Background(), &client.SetAddRequest{
-		Key:     toHash(key),
-		Members: values,
+	if resp, err := b.Client.Append(context.Background(), &client.AppendRequest{
+		Key:    toHash(key),
+		Values: values,
+		Condition: &client.AppendRequest_Condition{
+			Condition: &client.AppendRequest_Condition_ContainsValue{
+				ContainsValue: false,
+			},
+		},
 	}); err != nil {
 		return err
 	} else if err := resp.GetError(); err != nil {
@@ -235,9 +240,15 @@ func (b *Backend) SRem(key string, member interface{}, members ...interface{}) e
 	for i, m := range members {
 		values[i+1] = toValue(m)
 	}
-	if resp, err := b.Client.SetRemove(context.Background(), &client.SetRemoveRequest{
-		Key:     toHash(key),
-		Members: values,
+	if resp, err := b.Client.Filter(context.Background(), &client.FilterRequest{
+		Key: toHash(key),
+		Predicate: &client.FilterRequest_Predicate{
+			Predicate: &client.FilterRequest_Predicate_NotIn{
+				NotIn: &client.ValueArray{
+					Values: values,
+				},
+			},
+		},
 	}); err != nil {
 		return err
 	} else if err := resp.GetError(); err != nil {
@@ -280,7 +291,7 @@ func (b *Backend) SetNX(key string, value interface{}) (bool, error) {
 		Key:   toHash(key),
 		Value: toValue(value),
 		Condition: &client.SetRequest_Condition{
-			Value: &client.SetRequest_Condition_Exists{
+			Condition: &client.SetRequest_Condition_Exists{
 				Exists: false,
 			},
 		},
@@ -298,7 +309,7 @@ func (b *Backend) SetXX(key string, value interface{}) (bool, error) {
 		Key:   toHash(key),
 		Value: toValue(value),
 		Condition: &client.SetRequest_Condition{
-			Value: &client.SetRequest_Condition_Exists{
+			Condition: &client.SetRequest_Condition_Exists{
 				Exists: true,
 			},
 		},
@@ -316,7 +327,7 @@ func (b *Backend) SetEQ(key string, value, oldValue interface{}) (bool, error) {
 		Key:   toHash(key),
 		Value: toValue(value),
 		Condition: &client.SetRequest_Condition{
-			Value: &client.SetRequest_Condition_Equals{
+			Condition: &client.SetRequest_Condition_Equals{
 				Equals: toValue(oldValue),
 			},
 		},

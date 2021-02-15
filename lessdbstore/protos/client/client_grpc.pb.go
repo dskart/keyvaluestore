@@ -22,8 +22,8 @@ type ServiceClient interface {
 	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
 	Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error)
 	Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
-	SetAdd(ctx context.Context, in *SetAddRequest, opts ...grpc.CallOption) (*SetAddResponse, error)
-	SetRemove(ctx context.Context, in *SetRemoveRequest, opts ...grpc.CallOption) (*SetRemoveResponse, error)
+	Append(ctx context.Context, in *AppendRequest, opts ...grpc.CallOption) (*AppendResponse, error)
+	Filter(ctx context.Context, in *FilterRequest, opts ...grpc.CallOption) (*FilterResponse, error)
 	MapSet(ctx context.Context, in *MapSetRequest, opts ...grpc.CallOption) (*MapSetResponse, error)
 	MapDelete(ctx context.Context, in *MapDeleteRequest, opts ...grpc.CallOption) (*MapDeleteResponse, error)
 	MapGetRange(ctx context.Context, in *MapGetRangeRequest, opts ...grpc.CallOption) (*MapGetRangeResponse, error)
@@ -76,18 +76,18 @@ func (c *serviceClient) Delete(ctx context.Context, in *DeleteRequest, opts ...g
 	return out, nil
 }
 
-func (c *serviceClient) SetAdd(ctx context.Context, in *SetAddRequest, opts ...grpc.CallOption) (*SetAddResponse, error) {
-	out := new(SetAddResponse)
-	err := c.cc.Invoke(ctx, "/Service/set_add", in, out, opts...)
+func (c *serviceClient) Append(ctx context.Context, in *AppendRequest, opts ...grpc.CallOption) (*AppendResponse, error) {
+	out := new(AppendResponse)
+	err := c.cc.Invoke(ctx, "/Service/append", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *serviceClient) SetRemove(ctx context.Context, in *SetRemoveRequest, opts ...grpc.CallOption) (*SetRemoveResponse, error) {
-	out := new(SetRemoveResponse)
-	err := c.cc.Invoke(ctx, "/Service/set_remove", in, out, opts...)
+func (c *serviceClient) Filter(ctx context.Context, in *FilterRequest, opts ...grpc.CallOption) (*FilterResponse, error) {
+	out := new(FilterResponse)
+	err := c.cc.Invoke(ctx, "/Service/filter", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +156,8 @@ type ServiceServer interface {
 	Get(context.Context, *GetRequest) (*GetResponse, error)
 	Set(context.Context, *SetRequest) (*SetResponse, error)
 	Delete(context.Context, *DeleteRequest) (*DeleteResponse, error)
-	SetAdd(context.Context, *SetAddRequest) (*SetAddResponse, error)
-	SetRemove(context.Context, *SetRemoveRequest) (*SetRemoveResponse, error)
+	Append(context.Context, *AppendRequest) (*AppendResponse, error)
+	Filter(context.Context, *FilterRequest) (*FilterResponse, error)
 	MapSet(context.Context, *MapSetRequest) (*MapSetResponse, error)
 	MapDelete(context.Context, *MapDeleteRequest) (*MapDeleteResponse, error)
 	MapGetRange(context.Context, *MapGetRangeRequest) (*MapGetRangeResponse, error)
@@ -183,11 +183,11 @@ func (UnimplementedServiceServer) Set(context.Context, *SetRequest) (*SetRespons
 func (UnimplementedServiceServer) Delete(context.Context, *DeleteRequest) (*DeleteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Delete not implemented")
 }
-func (UnimplementedServiceServer) SetAdd(context.Context, *SetAddRequest) (*SetAddResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetAdd not implemented")
+func (UnimplementedServiceServer) Append(context.Context, *AppendRequest) (*AppendResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Append not implemented")
 }
-func (UnimplementedServiceServer) SetRemove(context.Context, *SetRemoveRequest) (*SetRemoveResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetRemove not implemented")
+func (UnimplementedServiceServer) Filter(context.Context, *FilterRequest) (*FilterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Filter not implemented")
 }
 func (UnimplementedServiceServer) MapSet(context.Context, *MapSetRequest) (*MapSetResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method MapSet not implemented")
@@ -292,38 +292,38 @@ func _Service_Delete_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_SetAdd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetAddRequest)
+func _Service_Append_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppendRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).SetAdd(ctx, in)
+		return srv.(ServiceServer).Append(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/Service/set_add",
+		FullMethod: "/Service/append",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).SetAdd(ctx, req.(*SetAddRequest))
+		return srv.(ServiceServer).Append(ctx, req.(*AppendRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Service_SetRemove_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetRemoveRequest)
+func _Service_Filter_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FilterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ServiceServer).SetRemove(ctx, in)
+		return srv.(ServiceServer).Filter(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/Service/set_remove",
+		FullMethod: "/Service/filter",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ServiceServer).SetRemove(ctx, req.(*SetRemoveRequest))
+		return srv.(ServiceServer).Filter(ctx, req.(*FilterRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -460,12 +460,12 @@ var Service_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Service_Delete_Handler,
 		},
 		{
-			MethodName: "set_add",
-			Handler:    _Service_SetAdd_Handler,
+			MethodName: "append",
+			Handler:    _Service_Append_Handler,
 		},
 		{
-			MethodName: "set_remove",
-			Handler:    _Service_SetRemove_Handler,
+			MethodName: "filter",
+			Handler:    _Service_Filter_Handler,
 		},
 		{
 			MethodName: "map_set",
