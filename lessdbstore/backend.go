@@ -2,13 +2,13 @@ package lessdbstore
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"strconv"
 
+	"github.com/zeebo/xxh3"
 	"google.golang.org/grpc"
 
 	"github.com/ccbrown/keyvaluestore"
@@ -106,9 +106,13 @@ func valuesToStrings(v []*client.Value) []string {
 }
 
 func toHash(key string) []byte {
-	h := sha256.New()
-	h.Write([]byte(key))
-	return h.Sum(nil)
+	ret := make([]byte, 32)
+	h := xxh3.HashString128(key)
+	binary.BigEndian.PutUint64(ret, h[0])
+	binary.BigEndian.PutUint64(ret[8:], h[1])
+	binary.BigEndian.PutUint64(ret[16:], h[0])
+	binary.BigEndian.PutUint64(ret[24:], h[1])
+	return ret
 }
 
 func toScalar(v interface{}) *client.Scalar {
