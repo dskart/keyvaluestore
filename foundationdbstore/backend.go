@@ -564,7 +564,7 @@ func (op *zHAdd) Complete(tx fdb.Transaction, key, field string, member interfac
 			tx.Clear(op.B.zScoreKey(key, field, prevScore))
 		}
 	}
-	tx.Set(op.B.zLexKey(key, field), append(floatBytes(score), v...))
+	tx.Set(op.B.zLexKey(key, field), append(floatBytes(score)))
 	tx.Set(op.B.zScoreKey(key, field, score), v)
 	return err
 }
@@ -782,20 +782,20 @@ func (b *Backend) ZHRangeByLex(key string, min, max string, limit int) ([]string
 func (b *Backend) lexRange(key string, min, max string) fdb.Range {
 	var begin fdb.KeySelector
 	if min[0] == '-' {
-		begin = fdb.FirstGreaterOrEqual(b.Subspace.Pack(tuple.Tuple{key, "l"}))
+		begin = fdb.FirstGreaterOrEqual(b.Subspace.Pack(tuple.Tuple{key, "s"}))
 	} else if min[0] == '[' {
-		begin = fdb.FirstGreaterOrEqual(b.Subspace.Pack(tuple.Tuple{key, "l", min[1:]}))
+		begin = fdb.FirstGreaterOrEqual(b.Subspace.Pack(tuple.Tuple{key, "s", 0.0, min[1:]}))
 	} else {
-		begin = fdb.FirstGreaterThan(b.Subspace.Pack(tuple.Tuple{key, "l", min[1:]}))
+		begin = fdb.FirstGreaterThan(b.Subspace.Pack(tuple.Tuple{key, "s", 0.0, min[1:]}))
 	}
 
 	var end fdb.KeySelector
 	if max[0] == '+' {
-		end = fdb.FirstGreaterOrEqual(b.Subspace.Pack(tuple.Tuple{key, "m"}))
+		end = fdb.FirstGreaterOrEqual(b.Subspace.Pack(tuple.Tuple{key, "t"}))
 	} else if max[0] == '[' {
-		end = fdb.FirstGreaterThan(b.Subspace.Pack(tuple.Tuple{key, "l", max[1:]}))
+		end = fdb.FirstGreaterThan(b.Subspace.Pack(tuple.Tuple{key, "s", 0.0, max[1:]}))
 	} else {
-		end = fdb.FirstGreaterOrEqual(b.Subspace.Pack(tuple.Tuple{key, "l", max[1:]}))
+		end = fdb.FirstGreaterOrEqual(b.Subspace.Pack(tuple.Tuple{key, "s", 0.0, max[1:]}))
 	}
 
 	return fdb.SelectorRange{
@@ -820,7 +820,7 @@ func (b *Backend) zHRangeByLex(key string, min, max string, limit int, reverse b
 			if err != nil {
 				return nil, err
 			}
-			ret = append(ret, string(kv.Value[8:]))
+			ret = append(ret, string(kv.Value))
 		}
 		return ret, nil
 	}); err != nil {
