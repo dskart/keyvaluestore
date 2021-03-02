@@ -154,7 +154,7 @@ func floatSortKey(f float64) []byte {
 }
 
 func (b *Backend) ZHAdd(key, field string, member interface{}, score float64) error {
-	prevScore, err := b.ZScore(key, field)
+	prevScore, err := b.zScore(key, field, gocql.LocalQuorum)
 	if err != nil {
 		return err
 	}
@@ -175,8 +175,12 @@ func (b *Backend) ZHAdd(key, field string, member interface{}, score float64) er
 }
 
 func (b *Backend) ZScore(key string, member interface{}) (*float64, error) {
+	return b.zScore(key, member, b.consistency())
+}
+
+func (b *Backend) zScore(key string, member interface{}, consistency gocql.Consistency) (*float64, error) {
 	s := *keyvaluestore.ToString(member)
-	iter := b.Session.Query(`SELECT d FROM kvs WHERE hk = ? AND rk = ? AND rk2 = ?`, []byte(key), empty, []byte(s)).Iter()
+	iter := b.Session.Query(`SELECT d FROM kvs WHERE hk = ? AND rk = ? AND rk2 = ?`, []byte(key), empty, []byte(s)).Consistency(consistency).Iter()
 	var ret float64
 	if iter.Scan(&ret) {
 		return &ret, nil
@@ -190,7 +194,7 @@ func (b *Backend) ZRem(key string, member interface{}) error {
 }
 
 func (b *Backend) ZHRem(key, field string) error {
-	score, err := b.ZScore(key, field)
+	score, err := b.zScore(key, field, gocql.LocalQuorum)
 	if score == nil || err != nil {
 		return err
 	}
@@ -221,7 +225,7 @@ func scoreCondition(key string, min, max float64) (string, []interface{}) {
 
 func (b *Backend) ZCount(key string, min, max float64) (int, error) {
 	cond, vars := scoreCondition(key, min, max)
-	iter := b.Session.Query("SELECT COUNT(*) FROM kvs WHERE "+cond, vars...).Iter()
+	iter := b.Session.Query("SELECT COUNT(*) FROM kvs WHERE "+cond, vars...).Consistency(b.consistency()).Iter()
 	var ret int
 	if iter.Scan(&ret) {
 		return ret, nil
@@ -231,7 +235,7 @@ func (b *Backend) ZCount(key string, min, max float64) (int, error) {
 
 func (b *Backend) ZLexCount(key, min, max string) (int, error) {
 	cond, vars := lexCondition(key, min, max)
-	iter := b.Session.Query("SELECT COUNT(*) FROM kvs WHERE "+cond, vars...).Iter()
+	iter := b.Session.Query("SELECT COUNT(*) FROM kvs WHERE "+cond, vars...).Consistency(b.consistency()).Iter()
 	var ret int
 	if iter.Scan(&ret) {
 		return ret, nil
@@ -261,7 +265,7 @@ func (b *Backend) zRangeByScoreWithScores(key string, min, max float64, limit in
 	if limit != 0 {
 		q += " LIMIT " + strconv.Itoa(limit)
 	}
-	iter := b.Session.Query(q, vars...).Iter()
+	iter := b.Session.Query(q, vars...).Consistency(b.consistency()).Iter()
 	var ret keyvaluestore.ScoredMembers
 	var buf []byte
 	var score float64
@@ -335,7 +339,7 @@ func (b *Backend) zHRangeByLex(key, min, max string, limit int, reverse bool) ([
 	if limit != 0 {
 		q += " LIMIT " + strconv.Itoa(limit)
 	}
-	iter := b.Session.Query(q, vars...).Iter()
+	iter := b.Session.Query(q, vars...).Consistency(b.consistency()).Iter()
 	var ret []string
 	var buf []byte
 	for iter.Scan(&buf) {
