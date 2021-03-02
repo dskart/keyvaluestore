@@ -49,10 +49,6 @@ func (b *Backend) NIncrBy(key string, n int64) (int64, error) {
 	return b.Client.IncrBy(key, n).Result()
 }
 
-func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error) {
-	return b.Client.ZIncrBy(key, n, member).Result()
-}
-
 func (b *Backend) SAdd(key string, member interface{}, members ...interface{}) error {
 	return b.Client.SAdd(key, append([]interface{}{member}, members...)...).Err()
 }

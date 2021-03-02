@@ -119,12 +119,6 @@ func (c *Invalidator) ZScore(key string, member interface{}) (*float64, error) {
 	return c.Backend.ZScore(key, member)
 }
 
-func (c *Invalidator) ZIncrBy(key string, member string, n float64) (float64, error) {
-	val, err := c.Backend.ZIncrBy(key, member, n)
-	c.Invalidate(key)
-	return val, err
-}
-
 func (c *Invalidator) ZRem(key string, member interface{}) error {
 	err := c.Backend.ZRem(key, member)
 	c.Invalidate(key)

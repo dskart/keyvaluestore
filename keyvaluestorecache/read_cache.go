@@ -265,12 +265,6 @@ func (c *ReadCache) ZScore(key string, member interface{}) (*float64, error) {
 	return score, err
 }
 
-func (c *ReadCache) ZIncrBy(key string, member string, n float64) (float64, error) {
-	val, err := c.backend.ZIncrBy(key, member, n)
-	c.Invalidate(key)
-	return val, err
-}
-
 func (c *ReadCache) ZRem(key string, member interface{}) error {
 	err := c.backend.ZRem(key, member)
 	c.Invalidate(key)

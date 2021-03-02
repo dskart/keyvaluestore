@@ -362,20 +362,6 @@ func (b *Backend) ZScore(key string, member interface{}) (*float64, error) {
 	return nil, nil
 }
 
-func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
-	s := *keyvaluestore.ToString(member)
-	return b.zhadd(key, s, s, func(previousScore *float64) (float64, error) {
-		if previousScore != nil {
-			return *previousScore + n, nil
-		}
-
-		return n, nil
-	})
-}
-
 func (b *Backend) zscore(key string, member interface{}) *float64 {
 	s, _ := b.m[key].(*sortedSet)
 	if s != nil {

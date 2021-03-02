@@ -11,10 +11,6 @@ type Backend interface {
 	// properties such as atomicity should not be assumed.
 	Batch() BatchOperation
 
-	// AtomicWrite executes up to 25 write operations atomically, failing entirely if any
-	// conditional operations (e.g. SetNX) are not executed.
-	AtomicWrite() AtomicWriteOperation
-
 	Delete(key string) (success bool, err error)
 	Get(key string) (*string, error)
 	Set(key string, value interface{}) error
@@ -65,9 +61,6 @@ type Backend interface {
 
 	// Remove from a sorted set.
 	ZRem(key string, member interface{}) error
-
-	// Increment a score in a sorted set or set the score if the member doesn't exist.
-	ZIncrBy(key string, member string, n float64) (float64, error)
 
 	// Get members of a sorted set by ascending score.
 	ZRangeByScore(key string, min, max float64, limit int) ([]string, error)
@@ -147,6 +140,15 @@ type Backend interface {
 	// If the backend wraps another (e.g. a read cache that wraps a redis backend), this returns the
 	// wrapped backend.
 	Unwrap() Backend
+}
+
+// Most backends support atomic write transactions.
+type AtomicWriter interface {
+	Backend
+
+	// AtomicWrite executes up to 25 write operations atomically, failing entirely if any
+	// conditional operations (e.g. SetNX) are not executed.
+	AtomicWrite() AtomicWriteOperation
 }
 
 type ScoredMembers []*ScoredMember

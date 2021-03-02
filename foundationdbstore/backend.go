@@ -612,29 +612,6 @@ func (b *Backend) zScore(tx fdb.ReadTransaction, key string, member interface{})
 	return &score, nil
 }
 
-func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error) {
-	field := *keyvaluestore.ToString(member)
-	v := []byte(field)
-	k := b.zLexKey(key, field)
-	if score, err := b.Database.Transact(func(tx fdb.Transaction) (interface{}, error) {
-		score := n
-		if existing, err := tx.Get(k).Get(); err != nil {
-			return nil, err
-		} else if existing != nil {
-			prevScore := floatFromBytes(existing[:8])
-			score += prevScore
-			tx.Clear(b.zScoreKey(key, field, prevScore))
-		}
-		tx.Set(k, append(floatBytes(score), v...))
-		tx.Set(b.zScoreKey(key, field, score), v)
-		return score, nil
-	}); err != nil {
-		return 0.0, err
-	} else {
-		return score.(float64), nil
-	}
-}
-
 func (b *Backend) ZRem(key string, member interface{}) error {
 	s := *keyvaluestore.ToString(member)
 	return b.ZHRem(key, s)

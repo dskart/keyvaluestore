@@ -5,7 +5,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,7 +28,10 @@ func assertConditionFail(t *testing.T, r keyvaluestore.AtomicWriteResult) {
 }
 
 func TestBackendAtomicWrite(t *testing.T, newBackend func() keyvaluestore.Backend) {
-	b := newBackend()
+	b, ok := newBackend().(keyvaluestore.AtomicWriter)
+	if !ok {
+		t.SkipNow()
+	}
 
 	t.Run("Set", func(t *testing.T) {
 		tx := b.AtomicWrite()
@@ -804,7 +806,7 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 
 		assert.NoError(t, b.ZHRem("foo", "b"))
 
-		members, err = b.ZHRangeByLex("foo", "-", "+", 0)
+		members, err = b.ZHRangeByScore("foo", 0.0, 10.0, 0)
 		assert.NoError(t, err)
 		assert.Equal(t, []string{"foo"}, members)
 	})
@@ -1237,92 +1239,6 @@ func TestBackend(t *testing.T, newBackend func() keyvaluestore.Backend) {
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, n, fmt.Sprintf("%#v %#v", tc.min, tc.max))
 		}
-	})
-
-	t.Run("ZIncrBy", func(t *testing.T) {
-		b := newBackend()
-
-		t.Run("ExistingKey", func(t *testing.T) {
-			assert.NoError(t, b.ZAdd("existing", "abc", 0.5))
-
-			newVal, err := b.ZIncrBy("existing", "abc", 1)
-			require.NoError(t, err)
-
-			assert.EqualValues(t, 1.5, newVal)
-
-			vals, err := b.ZRangeByScore("existing", 1.5, 1.5, 10)
-			require.NoError(t, err)
-
-			assert.Equal(t, []string{"abc"}, vals)
-
-			vals, err = b.ZRangeByScore("existing", 0, 1, 10)
-			require.NoError(t, err)
-
-			assert.Empty(t, vals)
-		})
-
-		t.Run("NoExistingKey", func(t *testing.T) {
-			newVal, err := b.ZIncrBy("missing", "bcd", 1)
-			require.NoError(t, err)
-
-			assert.EqualValues(t, 1, newVal)
-
-			vals, err := b.ZRangeByScore("missing", 1, 1, 10)
-			require.NoError(t, err)
-
-			assert.Equal(t, []string{"bcd"}, vals)
-		})
-
-		t.Run("Negative", func(t *testing.T) {
-			assert.NoError(t, b.ZAdd("neg", "cde", 0.5))
-
-			newVal, err := b.ZIncrBy("neg", "cde", -1)
-			require.NoError(t, err)
-
-			assert.EqualValues(t, -0.5, newVal)
-
-			vals, err := b.ZRangeByScore("neg", -0.5, -0.5, 10)
-			require.NoError(t, err)
-
-			assert.Equal(t, []string{"cde"}, vals)
-
-			vals, err = b.ZRangeByScore("neg", 0, 1, 10)
-			require.NoError(t, err)
-
-			assert.Empty(t, vals)
-		})
-
-		t.Run("MultipleWriters", func(t *testing.T) {
-			outerLoops := 10
-			innerLoops := 10
-			var wg sync.WaitGroup
-
-			for i := 0; i < outerLoops; i++ {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					successful := 0
-					errorStreak := 0
-					for successful < innerLoops {
-						_, err := b.ZIncrBy("MultipleWriters", "foo", 1)
-
-						if err == nil {
-							successful++
-							errorStreak = 0
-						} else {
-							errorStreak++
-							require.Less(t, errorStreak, 100)
-						}
-					}
-				}()
-			}
-
-			wg.Wait()
-
-			vals, err := b.ZRangeByScore("MultipleWriters", float64(outerLoops*innerLoops), float64(outerLoops*innerLoops), 10)
-			require.NoError(t, err)
-			assert.Equal(t, []string{"foo"}, vals)
-		})
 	})
 
 	t.Run("ZRangeByScoreWithScores", func(t *testing.T) {

@@ -490,42 +490,6 @@ func (b *Backend) ZScore(key string, member interface{}) (*float64, error) {
 	return nil, nil
 }
 
-func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error) {
-	var retValue float64
-
-	err := runContentiousMethod(func() (bool, error) {
-		var newValue float64
-
-		s := *keyvaluestore.ToString(member)
-
-		success, err := b.checkAndSet(key, s, "rk2", func(prev *string) (interface{}, error) {
-			if prev != nil {
-				floatValue := sortKeyFloat(*prev)
-				newValue = floatValue + n
-			} else {
-				newValue = n
-			}
-
-			return floatSortKey(newValue) + s, nil
-		}, map[string]interface{}{"v": s})
-
-		if err != nil {
-			return false, err
-		} else if !success {
-			return false, fmt.Errorf("unable to increment due to contention")
-		}
-
-		retValue = newValue
-		return true, nil
-	})
-
-	if err != nil {
-		return 0, err
-	}
-
-	return retValue, nil
-}
-
 func (b *Backend) ZRem(key string, member interface{}) error {
 	s := *keyvaluestore.ToString(member)
 	return b.ZHRem(key, s)
