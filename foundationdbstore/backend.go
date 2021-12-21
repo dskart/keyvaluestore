@@ -612,7 +612,7 @@ func (b *Backend) zScore(tx fdb.ReadTransaction, key string, member interface{})
 	return &score, nil
 }
 
-func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error) {
+func (b *Backend) ZIncrBy(key string, member interface{}, n float64) (float64, error) {
 	field := *keyvaluestore.ToString(member)
 	v := []byte(field)
 	k := b.zLexKey(key, field)

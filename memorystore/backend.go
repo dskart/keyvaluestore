@@ -362,7 +362,7 @@ func (b *Backend) ZScore(key string, member interface{}) (*float64, error) {
 	return nil, nil
 }
 
-func (b *Backend) ZIncrBy(key string, member string, n float64) (float64, error) {
+func (b *Backend) ZIncrBy(key string, member interface{}, n float64) (float64, error) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 

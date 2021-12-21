@@ -67,7 +67,7 @@ type Backend interface {
 	ZRem(key string, member interface{}) error
 
 	// Increment a score in a sorted set or set the score if the member doesn't exist.
-	ZIncrBy(key string, member string, n float64) (float64, error)
+	ZIncrBy(key string, member interface{}, n float64) (float64, error)
 
 	// Get members of a sorted set by ascending score.
 	ZRangeByScore(key string, min, max float64, limit int) ([]string, error)
