@@ -301,7 +301,7 @@ func floatSortKeyAfter(f float64) string {
 
 type sortedSet struct {
 	scoresByMember map[string]float64
-	m              *immutable.OrderedMap
+	m              *immutable.OrderedMap[string, string]
 }
 
 func (b *Backend) zhadd(key, field string, member interface{}, f func(previousScore *float64) (float64, error)) (float64, error) {
@@ -454,10 +454,10 @@ func (b *Backend) zRangeByScoreWithScores(key string, min, max float64, limit in
 		next = next.Next()
 	}
 
-	for (limit == 0 || len(results) < limit) && next != nil && next.Key().(string)[:len(maxSortKeyPrefix)] <= maxSortKeyPrefix {
+	for (limit == 0 || len(results) < limit) && next != nil && next.Key()[:len(maxSortKeyPrefix)] <= maxSortKeyPrefix {
 		results = append(results, &keyvaluestore.ScoredMember{
-			Score: sortKeyFloat(next.Key().(string)),
-			Value: next.Value().(string),
+			Score: sortKeyFloat(next.Key()),
+			Value: next.Value(),
 		})
 		next = next.Next()
 	}
@@ -502,17 +502,17 @@ func (b *Backend) zRevRangeByScoreWithScores(key string, min, max float64, limit
 	minSortKey := floatSortKey(min)
 	sortKeyAfterMax := floatSortKeyAfter(max)
 
-	var next *immutable.OrderedMapElement
+	var next *immutable.OrderedMapElement[string, string]
 	if sortKeyAfterMax == "" {
 		next = s.m.Max()
 	} else {
 		next = s.m.MaxBefore(sortKeyAfterMax)
 	}
 
-	for (limit == 0 || len(results) < limit) && next != nil && next.Key().(string) >= minSortKey {
+	for (limit == 0 || len(results) < limit) && next != nil && next.Key() >= minSortKey {
 		results = append(results, &keyvaluestore.ScoredMember{
-			Score: sortKeyFloat(next.Key().(string)),
-			Value: next.Value().(string),
+			Score: sortKeyFloat(next.Key()),
+			Value: next.Value(),
 		})
 		next = next.Prev()
 	}
@@ -543,28 +543,28 @@ func (b *Backend) ZRangeByLex(key string, min, max string, limit int) ([]string,
 
 	sortKeyPrefix := string(floatSortKey(0.0))
 
-	var next *immutable.OrderedMapElement
+	var next *immutable.OrderedMapElement[string, string]
 	if min == "-" {
 		next = s.m.Min()
 	} else {
 		next = s.m.MinAfter(sortKeyPrefix + min[1:])
 		if min[0] == '[' {
 			if next == nil {
-				if x := s.m.Max(); x != nil && x.Key().(string)[len(sortKeyPrefix):] == min[1:] {
+				if x := s.m.Max(); x != nil && x.Key()[len(sortKeyPrefix):] == min[1:] {
 					next = x
 				}
-			} else if x := next.Prev(); x != nil && x.Key().(string)[len(sortKeyPrefix):] == min[1:] {
+			} else if x := next.Prev(); x != nil && x.Key()[len(sortKeyPrefix):] == min[1:] {
 				next = x
 			}
 		}
 	}
 
 	for (limit == 0 || len(results) < limit) && next != nil {
-		lex := next.Key().(string)[len(sortKeyPrefix):]
+		lex := next.Key()[len(sortKeyPrefix):]
 		if max != "+" && (lex > max[1:] || (max[0] == '(' && lex == max[1:])) {
 			break
 		}
-		results = append(results, next.Value().(string))
+		results = append(results, next.Value())
 		next = next.Next()
 	}
 
@@ -588,28 +588,28 @@ func (b *Backend) ZRevRangeByLex(key string, min, max string, limit int) ([]stri
 
 	sortKeyPrefix := string(floatSortKey(0.0))
 
-	var next *immutable.OrderedMapElement
+	var next *immutable.OrderedMapElement[string, string]
 	if max == "+" {
 		next = s.m.Max()
 	} else {
 		next = s.m.MaxBefore(sortKeyPrefix + max[1:])
 		if max[0] == '[' {
 			if next == nil {
-				if x := s.m.Min(); x != nil && x.Key().(string)[len(sortKeyPrefix):] == min[1:] {
+				if x := s.m.Min(); x != nil && x.Key()[len(sortKeyPrefix):] == min[1:] {
 					next = x
 				}
-			} else if x := next.Next(); x != nil && x.Key().(string)[len(sortKeyPrefix):] == max[1:] {
+			} else if x := next.Next(); x != nil && x.Key()[len(sortKeyPrefix):] == max[1:] {
 				next = x
 			}
 		}
 	}
 
 	for (limit == 0 || len(results) < limit) && next != nil {
-		lex := next.Key().(string)[len(sortKeyPrefix):]
+		lex := next.Key()[len(sortKeyPrefix):]
 		if min != "-" && (lex < min[1:] || (min[0] == '(' && lex == min[1:])) {
 			break
 		}
-		results = append(results, next.Value().(string))
+		results = append(results, next.Value())
 		next = next.Prev()
 	}
 

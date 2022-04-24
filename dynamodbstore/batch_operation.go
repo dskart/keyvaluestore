@@ -182,7 +182,7 @@ func (op *BatchOperation) execReads() error {
 
 		g.Go(func() error {
 			unprocessed := map[string]*dynamodb.KeysAndAttributes{
-				op.Backend.TableName: &dynamodb.KeysAndAttributes{
+				op.Backend.TableName: {
 					ConsistentRead: aws.Bool(!op.Backend.AllowEventuallyConsistentReads),
 					Keys:           batch,
 				},

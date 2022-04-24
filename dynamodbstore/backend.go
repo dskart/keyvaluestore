@@ -159,10 +159,10 @@ func (b *Backend) Get(key string) (*string, error) {
 
 func compositeKey(hash, sort string) map[string]*dynamodb.AttributeValue {
 	return map[string]*dynamodb.AttributeValue{
-		"hk": &dynamodb.AttributeValue{
+		"hk": {
 			B: []byte(hash),
 		},
-		"rk": &dynamodb.AttributeValue{
+		"rk": {
 			B: []byte(sort),
 		},
 	}
@@ -262,7 +262,7 @@ func (b *Backend) SAdd(key string, member interface{}, members ...interface{}) e
 		TableName:        aws.String(b.TableName),
 		UpdateExpression: aws.String("ADD v :v"),
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":v": &dynamodb.AttributeValue{
+			":v": {
 				BS: serializeSMembers(member, members...),
 			},
 		},
@@ -278,7 +278,7 @@ func (b *Backend) SRem(key string, member interface{}, members ...interface{}) e
 		TableName:        aws.String(b.TableName),
 		UpdateExpression: aws.String("DELETE v :v"),
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":v": &dynamodb.AttributeValue{
+			":v": {
 				BS: serializeSMembers(member, members...),
 			},
 		},

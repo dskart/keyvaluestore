@@ -172,7 +172,7 @@ func (op *AtomicWriteOperation) SAdd(key string, member interface{}, members ...
 			TableName:        &op.Backend.TableName,
 			UpdateExpression: aws.String("ADD v :v"),
 			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":v": &dynamodb.AttributeValue{
+				":v": {
 					BS: serializeSMembers(member, members...),
 				},
 			},
@@ -187,7 +187,7 @@ func (op *AtomicWriteOperation) SRem(key string, member interface{}, members ...
 			TableName:        &op.Backend.TableName,
 			UpdateExpression: aws.String("DELETE v :v"),
 			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":v": &dynamodb.AttributeValue{
+				":v": {
 					BS: serializeSMembers(member, members...),
 				},
 			},
@@ -235,7 +235,7 @@ func (op *AtomicWriteOperation) HSetNX(key, field string, value interface{}) key
 				"#f": aws.String(encodeHashFieldName(field)),
 			},
 			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":v": &dynamodb.AttributeValue{
+				":v": {
 					B: []byte(*keyvaluestore.ToString(value)),
 				},
 			},
